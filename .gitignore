@@ -1,0 +1,8 @@
+.mypy_cache/
+DL Data/
+Generated Shapefiles/
+sandbox/
+data/
+__pycache__/
+GeoDataProcessing/
+sandbox/

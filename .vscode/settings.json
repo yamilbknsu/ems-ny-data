@@ -2,5 +2,6 @@
     "python.pythonPath": "C:\\Users\\Yamil\\Anaconda3\\envs\\py3.6geo\\python.exe",
     "python.linting.flake8Enabled": true,
     "python.linting.pylintEnabled": false,
-    "python.linting.mypyEnabled": true
+    "python.linting.mypyEnabled": true,
+    "python.linting.flake8Args": ["--ignore=E501"]
 }

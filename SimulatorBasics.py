@@ -53,7 +53,7 @@ class Simulator(AbstractSimulator):
 
     def __init__(self, metrics = {}, verbose = True):
         super().__init__()
-        self.time = None
+        self.time = 0
         self.metrics = metrics
         self.verbose = verbose
 
@@ -124,6 +124,9 @@ class SimulationEntity:
         self.name = name
         if name is None:
             self.name = 'Entity {}'.format(SimulationEntity.N_ENTITIES)
+    
+    def __str__(self):
+        return self.name
 
 class StateStatistic:
 
@@ -238,3 +241,17 @@ class CounterStatistic:
     
     def __str__(self):
         return 'CounterStatistic {}: value: {}'.format(self.name, self.value())
+    
+
+class EventRecorder:
+
+    def __init__(self):
+        self.executed_events = []
+    
+    def record(self, event):
+        self.executed_events.append(event)
+    
+    def getEvents(self):
+        output_events = [{**{key:str(value) for key, value in e.__dict__.items()}, **{'type':type(e).__name__}} for e in self.executed_events]
+        self.executed_events = []
+        return output_events

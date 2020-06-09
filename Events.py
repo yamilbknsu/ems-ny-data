@@ -21,9 +21,9 @@ class EmergencyLeaveSystemEvent(Sim.Event):
 
         self.entity = entity
         self.emergency: "Models.Emergency" = emergency
-        self.vehicle = vehicle  # This is to safely remove the reference to the patient form the vehicle                    # noqa E501
+        self.vehicle = vehicle  # This is to safely remove the reference to the patient form the vehicle                    
         self.chain_assignment = chain_assignment
-        self.message: str = '{} leaving the system {}'.format(emergency.name, 'satisfied' if satisfied else 'unsatisfied')  # noqa E501
+        self.message: str = '{} leaving the system {}'.format(emergency.name, 'satisfied' if satisfied else 'unsatisfied')  
 
     
     def execute(self, simulator: "Models.EMSModel"):
@@ -50,7 +50,7 @@ class AmbulanceFinishAttendingEvent(Sim.Event):
         self.entity = entity
         self.vehicle: "Models.Vehicle" = vehicle
         self.emergency: "Models.Emergency" = emergency
-        self.message: str = '{} finished attending {}'.format(vehicle.name, emergency.name)  # noqa E501
+        self.message: str = '{} finished attending {}'.format(vehicle.name, emergency.name)  
 
     def execute(self, simulator: "Models.EMSModel"):
         # Schedule the end of the atention
@@ -191,8 +191,13 @@ class AssignedEvent(Sim.Event):
         
         # Schedule the start of the movement for the vehicle
         self.vehicle.onArrivalToNode(self.vehicle.pos)
-        simulator.insert(AmbulanceStartMovingEvent(self.vehicle, simulator.now(), self.vehicle,
+
+        if len(path[0]) != 0:
+            simulator.insert(AmbulanceStartMovingEvent(self.vehicle, simulator.now(), self.vehicle,
                             simulator.city_graph.es[self.vehicle.actual_edge]))
+        else:
+            simulator.insert(AmbulanceArriveToNodeEvent(self.vehicle, simulator.now(), 
+                                                        self.vehicle, self.emergency.node))
 
 
 class AmbulanceStartMovingEvent(Sim.Event):
@@ -207,15 +212,16 @@ class AmbulanceStartMovingEvent(Sim.Event):
         self.entity: object = entity
         self.vehicle = vehicle
         self.edge = edge
+        self.edge_id = edge['edgeid']
         self.message: str = '{} starts moving to node {} through edge {}...'\
             .format(vehicle.name, edge['v'], edge['edgeid'])
 
     def execute(self, simulator: "Models.EMSModel"):
-        travel_time = self.edge['length']/self.vehicle.speed
-        self.vehicle.onMovingToNextNode(simulator.now() + travel_time)
+        self.travel_time = self.edge['length']/self.vehicle.speed
+        self.vehicle.onMovingToNextNode(simulator.now() + self.travel_time)
 
         # Schedule vehicle arrival to node
-        simulator.insert(AmbulanceArriveToNodeEvent(self.vehicle, simulator.now() + travel_time,
+        simulator.insert(AmbulanceArriveToNodeEvent(self.vehicle, simulator.now() + self.travel_time,
                                                self.vehicle, self.edge['v']))
 
 
@@ -257,13 +263,13 @@ class EmergencyArrivalEvent(Sim.Event):
         self.entity: object = entity
         self.node: str = node
         self.severity: int = severity
+        self.emergency = Models.Emergency(self.time, self.node, self.severity)
 
         self.message: str = "Emergency arrived at node {}".format(node)
     
     def execute(self, simulator: "Models.EMSModel") -> AmbulanceAssignmentEvent:
         # Create the emergency and append it to the reference list
-        newEmergency = Models.Emergency(self.time, self.node, self.severity)
-        simulator.activeEmergencies.append(newEmergency)
+        simulator.activeEmergencies.append(self.emergency)
 
         # Schedule the next emergency, if there is one
         try:
@@ -272,7 +278,7 @@ class EmergencyArrivalEvent(Sim.Event):
             pass
 
         # Chain an assignment of the ambulances right next to the arrival
-        return AmbulanceAssignmentEvent(newEmergency, self.time)
+        return AmbulanceAssignmentEvent(self.emergency, self.time)
 
 
 class AmbulanceArrivalEvent(Sim.Event):
@@ -296,7 +302,7 @@ class AmbulanceArrivalEvent(Sim.Event):
         self.message: str = "Ambulance arrived to the system at node {}!".format(node)
 
     def execute(self, simulator: "Models.EMSModel"):
-        pass
+        simulator.vehicles.append(self.vehicle)
 
 
 class EndSimulationEvent(Sim.Event):

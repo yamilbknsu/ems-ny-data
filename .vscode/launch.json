@@ -4,12 +4,13 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Project: Launch main (Experiments.py)",
             "type": "python",
             "request": "launch",
             "stopOnEntry": false,
-            "pythonPath": "${config:python.pythonPath}",
+            "pythonPath": "${config:python.interpreterPath}",
             "program": "Experiments.py",
             "cwd": "${workspaceRoot}",
             "env": {},
@@ -20,7 +21,7 @@
             "type": "python",
             "request": "launch",
             "stopOnEntry": false,
-            "pythonPath": "${config:python.pythonPath}",
+            "pythonPath": "${config:python.interpreterPath}",
             "program": "GeoDataProcessing/OSMDownloader.py",
             "cwd": "${workspaceRoot}",
             "env": {},
@@ -31,8 +32,52 @@
             "type": "python",
             "request": "launch",
             "stopOnEntry": false,
-            "pythonPath": "${config:python.pythonPath}",
+            "pythonPath": "${config:python.interpreterPath}",
             "program": "GeoDataProcessing/graph_generator.py",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
+        },
+        {
+            "name": "Backend Server",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "pythonPath": "${config:python.interpreterPath}",
+            "program": "BackendRouting.py",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
+        },
+        {
+            "name": "Reviser",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "pythonPath": "${config:python.interpreterPath}",
+            "program": "GeoDataProcessing/graph_reviser.py",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
+        },
+        {
+            "name": "Dispatch",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "pythonPath": "${config:python.interpreterPath}",
+            "program": "GeoDataProcessing/dispatchAnalysis.py",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
+        },
+        {
+            "name": "Preprocessing",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "pythonPath": "${config:python.interpreterPath}",
+            "program": "GeoDataProcessing/preprocessingValuesGenerator.py",
             "cwd": "${workspaceRoot}",
             "env": {},
             "envFile": "${workspaceRoot}/.env"

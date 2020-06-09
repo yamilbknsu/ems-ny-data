@@ -45,7 +45,7 @@ class CustomArrivalsGenerator(ArrivalGenerator):
     """
 
     def __init__(self,
-                 arrivals: List[Events.EmergencyArrivalEvent]):
+                 arrivals: List['Events.EmergencyArrivalEvent']):
         super().__init__()
 
         self.arrivals: List[Events.EmergencyArrivalEvent] = arrivals

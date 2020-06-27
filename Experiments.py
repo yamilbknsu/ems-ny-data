@@ -33,31 +33,35 @@ with open(DATA_DIR + 'Arrival Events//HS19//nsnr//strep_0_rep_0.pickle', 'rb') a
     emergencies += pickle.load(file)
 
 # Importing parameters
-with open(DATA_DIR + 'Preprocessing Values//candidate_nodes.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//candidate_nodes.pickle', 'rb') as file:
     candidate_nodes = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//demand_nodes.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//demand_nodes.pickle', 'rb') as file:
     demand_nodes = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//hourly_demand_rates_HS.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//hourly_demand_rates_HS.pickle', 'rb') as file:
     demand_rates = [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//hourly_demand_rates_LS.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//hourly_demand_rates_LS.pickle', 'rb') as file:
     demand_rates += [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//mean_activity_time_HS.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//mean_activity_time_HS.pickle', 'rb') as file:
     busy_time = [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//mean_activity_time_LS.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//mean_activity_time_LS.pickle', 'rb') as file:
     busy_time += [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//candidate_candidate_time.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//candidate_candidate_time.pickle', 'rb') as file:
     cand_cand_time = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//candidate_demand_time.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//candidate_demand_time.pickle', 'rb') as file:
     cand_demand_time = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//neighborhood_candidates.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//neighborhood_candidates.pickle', 'rb') as file:
     neighborhood_candidates = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//neighborhood.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//neighborhood.pickle', 'rb') as file:
     neighborhood = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//neighborhood_k.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//neighborhood_k.pickle', 'rb') as file:
     neighborhood_k = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//reachable_demand.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//candidate_borough.pickle', 'rb') as file:
+    candidate_borough = pickle.load(file)
+with open(DATA_DIR + 'Preprocessing Values//1km//demand_borough.pickle', 'rb') as file:
+    demand_borough = pickle.load(file)
+with open(DATA_DIR + 'Preprocessing Values//1km//reachable_demand.pickle', 'rb') as file:
     reachable_demand = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//reachable_inverse.pickle', 'rb') as file:
+with open(DATA_DIR + 'Preprocessing Values//1km//reachable_inverse.pickle', 'rb') as file:
     reachable_inverse = pickle.load(file)
 
  # Load the speeds df
@@ -84,12 +88,17 @@ sim_parameters = Models.SimulationParameters(
                 neighborhood=neighborhood,
                 neighborhood_candidates=neighborhood_candidates,
                 neighbor_k=neighborhood_k,
+                candidates_borough=candidate_borough,
+                demand_borough=demand_borough,
                 reachable_demand=reachable_demand,
-                reachable_inverse=reachable_inverse
+                reachable_inverse=reachable_inverse,
+                maximum_uber_per_period = 20
 )
 
-simulator: Models.EMSModel = Models.EMSModel(graph, generator, Solvers.PreparednessDispatcher(), sim_parameters)
+simulator: Models.EMSModel = Models.EMSModel(graph, generator, Solvers.PreparednessDispatcher(), Solvers.MaxExpectedSurvivalRelocatorOnlyBorough(), sim_parameters)
 
 #solver = Solvers.MaxExpectedSurvivalRelocator()
 #solver.relocate(simulator, simulator.parameters)
+simulator.insert(Events.DebugEvent(None, 5))
+simulator.insert(Events.DebugEvent(None, 5.5))
 simulator.run()

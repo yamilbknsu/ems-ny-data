@@ -4,7 +4,27 @@ from typing import List, Optional
 
 # Internal imports
 import Models
+import Solvers
 import SimulatorBasics as Sim
+
+
+class DebugEvent(Sim.Event):
+
+    def __init__(self,
+                 entity: object,
+                 time: float,
+                 name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.message: str = 'Debug Event'
+
+    def execute(self, simulator: "Models.EMSModel"):
+        optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = 1)
+        simulator.ambulance_stations[0] = optimal_positions[0]
+        
+        for v in reposition_dict:
+            v.teleportToNode(reposition_dict[v])
 
 
 class EmergencyLeaveSystemEvent(Sim.Event):

@@ -1,7 +1,7 @@
 import time
 import numpy as np
 import gurobipy as grb
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from ortools.linear_solver import pywraplp
 
 # Internal imports
@@ -158,12 +158,13 @@ class RelocationModel:
 
     def relocate(self,
                  simulator: "Models.EMSModel",
-                 params: "Models.SimulationParameters") -> Dict["Models.Vehicle", str]:
+                 params: "Models.SimulationParameters",
+                 **kwargs) -> Optional[Tuple[List[List[str]], Dict["Models.Vehicle", str]]]:
         """
 
         """
         print('Warning! Relocation not implemented')
-        return {}
+        return None
 
 
 class MaxExpectedSurvivalRelocator(RelocationModel):
@@ -172,29 +173,50 @@ class MaxExpectedSurvivalRelocator(RelocationModel):
         super().__init__()
 
     def SurvivalFunction(self, response_times):
-        return np.ones(shape = response_times.shape)
-        #return (1+np.exp(0.679+.262*response_times))**-1
+        #return np.ones(shape = response_times.shape)
+        return (1+np.exp(0.679+.262*response_times))**-1
 
     def relocate(self,
                  simulator: "Models.EMSModel",
-                 params: "Models.SimulationParameters") -> Dict["Models.Vehicle", str]:
+                 params: "Models.SimulationParameters") -> Tuple[List[List[str]], Dict["Models.Vehicle", str]]:
 
-        # First stage
-        start_time = time.time()
-        print('0 - Starting first stage')
+        # Initialize return list
+        # This list will hold the final optimal positions of the ambulances
+        final_positions: List = []
+
+        # Initialize the return dict
+        # This will hold the vehicle repositioning values
+        final_repositioning: Dict["Models.Vehicle", str] = {}
 
         # Parameters
+        actual_ALS_vehicles = {v.to_node: v for v in simulator.getAvaliableVehicles(0)}
+        actual_BLS_vehicles = {v.to_node: v for v in simulator.getAvaliableVehicles(1)}
         neighbor_k = params.neighbor_k
         neighborhood = params.neighborhood
+        borough_cand = params.candidates_borough
+        borough_demand = params.demand_borough
+        ambulance_distribution = params.ambulance_distribution
         D_rates = params.demand_rates
         Busy_rates = params.mean_busytime
+        Q = params.Q
+        P = params.P
         C = params.candidate_nodes
         D = params.demand_nodes
         t = simulator.timePeriod()
 
-        # Create the mip solver with the CBC backend.
-        model = grb.Model(name="MIP Model")
+        overload_penalty = params.overload_penalty
+        maximum_uber = params.maximum_uber_per_period
+        cand_cand_time = params.cand_cand_time
 
+        ########################
+        #    First ALS part    #
+        ########################
+
+        # First stage
+        start_time = time.time()
+        print('0 - Starting first stage')
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="First stage optimal positions")
         # Declare model variables
         print(time.time() - start_time, '- Declaring Variables...')
 
@@ -202,19 +224,10 @@ class MaxExpectedSurvivalRelocator(RelocationModel):
              for j, node in enumerate(C)]
 
         x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + str(k) + '_' + node)
-                        for k in range(neighbor_k[0][node]+1)]
+                        for k in range(neighbor_k[t][node]+1)]
                         for node in C]
-
         # Coefficients
         # ------------
-        # Q parameter
-        print(time.time() - start_time, '- Computing q...')
-        demand_load = np.array([[np.sum(D_rates[0].loc[t+1, neighborhood[t][j]] * 
-                                        Busy_rates[0].loc[t+1, neighborhood[t][j]]) for j in C]]).T
-        demand_load = demand_load @ np.array([[1/k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)]])
-        demand_load = 1-np.power(demand_load, [k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)])
-        demand_load[demand_load < 0] = 0
-
         # [j, i] matrix
         print(time.time() - start_time, '- Computing O.F. coefficients...')
         survival_matrix = self.SurvivalFunction(params.cand_demand_time[t])
@@ -230,27 +243,26 @@ class MaxExpectedSurvivalRelocator(RelocationModel):
         
         # Objective function
         print(time.time() - start_time, '- Setting O.F...')
-        availability = [grb.LinExpr([demand_load[j][k] for k in range(neighbor_k[0][node])],
-                        [x[j][k] for k in range(neighbor_k[0][node])]) for j, node in enumerate(C)]       # noqa E501
+        availability = [grb.LinExpr([Q[j][k] for k in range(neighbor_k[t][node])],
+                        [x[j][k] for k in range(neighbor_k[t][node])]) for j, node in enumerate(C)]       # noqa E501
 
 
         
-        model.setObjective(1000*grb.quicksum(grb.quicksum(coefficients[0,C.index(c_node)]*availability[C.index(c_node)] 
-                           for c_node in params.reachable_inverse[0][d_node])
-                           for d_node in D))
+        model.setObjective(grb.quicksum(grb.quicksum(coefficients[C.index(c_node),i]*availability[C.index(c_node)] 
+                           for c_node in params.reachable_inverse[t][d_node])
+                           for i, d_node in enumerate(D)))
         model.ModelSense = grb.GRB.MAXIMIZE
 
         print(time.time() - start_time, '- Constraints...')
         # Constraints
         # Capacity constraint
-        Cap_constraint = model.addConstr(lhs=grb.quicksum(y),
-                                        sense=grb.GRB.LESS_EQUAL,
-                                        rhs=303,
-                                        name='CapacityConstraint')
+        Cap_constraint = {b: model.addConstr(lhs=grb.quicksum(y[C.index(c)] for c in borough_cand[b]),
+                                             sense=grb.GRB.EQUAL,
+                                             rhs=ambulance_distribution[0][b],
+                                             name='CapacityConstraint_{}'.format(b)) for b in range(6)}
         # Constraint 1
         Const_1 = {j: model.addConstr(lhs=grb.quicksum(x[j]),
                                       sense=grb.GRB.LESS_EQUAL,
-                                      #rhs=y[j],
                                       rhs=1,
                                       name='Const_1_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
         # Constraint 2
@@ -259,8 +271,460 @@ class MaxExpectedSurvivalRelocator(RelocationModel):
                                       rhs=grb.LinExpr(list(range(len(x[j]))), x[j]),
                                       name='Const_2_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
 
+        print(time.time() - start_time, '- Model Params...')
+        model.setParam('MIPGap', .1)
+        model.setParam('TimeLimit', 45)
+        
+        print(time.time() - start_time, '- Solving the model...')
+        status = model.optimize()
+
+        print(time.time() - start_time, '- Done!')
+
+        # -------------------------
+        ########################
+        #   Second ALS part    #
+        ########################
+
+        print(time.time() - start_time, '- Starting first stage part 2')
+
+        actual_positions = [actual_ALS_vehicles[v].to_node for v in actual_ALS_vehicles]
+        target_positions = []
+        for j in range(len(C)):
+            if y[j].x == 1:
+                target_positions.append(C[j])
+        
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="First stage optimal relocations")
+
+        print(time.time() - start_time, '- Declaring Variables...')
+        x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + i + '_' + j)
+              for j in target_positions]
+              for i in actual_positions]
+        
+        y = [model.addVar(vtype=grb.GRB.CONTINUOUS, lb=0, name='y_' + i)
+             for i in actual_ALS_vehicles]
+
+        print(time.time() - start_time, '- Computing coefficents...')
+        weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(simulator.timePeriod())
+        travel_times = np.array(simulator.city_graph.shortest_paths(actual_positions, target_positions, weights))
+
+        print(time.time() - start_time, '- Setting O.F...')
+        model.setObjective(grb.quicksum(grb.LinExpr(travel_times[i], x[i])
+                            for i in range(len(actual_positions)))
+                            + overload_penalty*grb.quicksum(y))
+        model.ModelSense = grb.GRB.MINIMIZE
+
+        print(time.time() - start_time, '- Constraints...')
+        # Constraint 1
+        Const_1 = {i: model.addConstr(lhs=grb.quicksum(x[i]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(i)) for i in range(len(actual_positions))}
+        # Constraint 2
+        Const_2 = {j: model.addConstr(lhs=grb.quicksum(x[i][j] for i in range(len(actual_positions))),
+                                      sense=grb.GRB.GREATER_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(j)) for j in range(len(target_positions))}
+        # Constraint 3
+        # TODO: Check rhs
+        Const_3 = {i: model.addConstr(lhs=actual_ALS_vehicles[node].reposition_workload + \
+                                          grb.LinExpr(travel_times[i], x[i]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=y[i],
+                                      name='Const_1_{}'.format(i)) for i, node in enumerate(actual_positions)}
+
+        print(time.time() - start_time, '- Model Params...')
+        model.setParam('MIPGap', .1)
+        
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
         print(time.time() - start_time, '- Done!')
+        
+        # Update positions for first stage
+        final_positions.append(target_positions)
+
+        reposition_matrix = [[x[i][j].x for j in range(len(target_positions))] for i in range(len(actual_positions))]
+        for i, node in enumerate(actual_positions):
+            final_repositioning[actual_ALS_vehicles[node]] = target_positions[reposition_matrix[i].index(1)]
+
+
+        # -------------------------------------------------------------------------------------------------------------------
+
+        ########################
+        #    First BLS part    #
+        ########################
+
+        # Start the second stage
+        print(time.time() - start_time, '- Starting second stage')
+
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="Second stage optimal positions")
+
+        # Declare model variables
+        print(time.time() - start_time, '- Declaring Variables...')
+
+        y = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node)
+             for j, node in enumerate(C)]
+
+        z = [model.addVar(vtype=grb.GRB.INTEGER, name='z_' + node)
+             for j, node in enumerate(C)]
+
+        x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + str(k) + '_' + node)
+                        for k in range(neighbor_k[t][node]+1)]
+                        for node in C]
+
+        # Coefficients
+        # ------------
+        print(time.time() - start_time, '- Computing borough demand...')
+        borough_demand = np.array([np.sum(P[D.index(d), 1] for d in borough_demand[b]) for b in range(1,6)])
+        borough_demand = borough_demand/np.sum(borough_demand)
+
+        # Allocate the ALS ambulances to each borough
+        n_total = len(actual_BLS_vehicles)
+        n_allocated = 0
+        allocated_ambulances = [0]
+        for b in range(5-1):
+            n_allocated += int(n_total * borough_demand[b])
+            allocated_ambulances.append(int(n_total * borough_demand[b]))
+        allocated_ambulances.append(int(n_total - n_allocated))
+
+        # [j, i] matrix
+        print(time.time() - start_time, '- Computing O.F. coefficients...')
+
+        # Filter the survival matrix leaving only the nodes that are reachable,
+        # 0 to all the rest
+        filtered_survival = np.array([[1 if c_node in params.reachable_inverse[t][d_node] else 0        # noqa E501
+                                       for j, c_node in enumerate(C)]
+                                       for i, d_node in enumerate(D)]).T
+
+        # [j, i] matrix respresenting S_{i,j} * d_i
+        coefficients = params.demand_rates[1].loc[t+1, params.demand_nodes].values * filtered_survival                      # noqa E501
+        
+        # Objective function
+        print(time.time() - start_time, '- Setting O.F...')
+        availability = [grb.LinExpr([P[j][k] for k in range(neighbor_k[t][node])],
+                        [x[j][k] for k in range(neighbor_k[t][node])]) for j, node in enumerate(C)]       # noqa E501
+        
+        model.setObjective(grb.quicksum(grb.quicksum(coefficients[C.index(c_node),i]*availability[C.index(c_node)] 
+                           for c_node in params.reachable_inverse[t][d_node])
+                           for i, d_node in enumerate(D)))
+        model.ModelSense = grb.GRB.MAXIMIZE
+
+        print(time.time() - start_time, '- Constraints...')
+        # Constraints
+        # Capacity constraint
+        Cap_constraint = {b: model.addConstr(lhs=grb.quicksum(y[C.index(c)] for c in borough_cand[b]),
+                                             sense=grb.GRB.EQUAL,
+                                             rhs=allocated_ambulances[b],
+                                             name='CapacityConstraint_{}'.format(b)) for b in range(6)}
+        # Constraint 1
+        Const_1 = {j: model.addConstr(lhs=grb.quicksum(x[j]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
+        # Constraint 2
+        Const_2 = {j: model.addConstr(lhs=grb.quicksum(y[C.index(u)] + z[C.index(u)] for u in params.neighborhood_candidates[t][c_node]),
+                                      sense=grb.GRB.EQUAL,
+                                      rhs=grb.LinExpr(list(range(len(x[j]))), x[j]),
+                                      name='Const_2_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
+        
+        # Constraint 3
+        mean_uber_load = [Busy_rates[1].loc[t+1,neighborhood[t][j]].mean() for j in C]
+        Const_3 = model.addConstr(lhs=grb.LinExpr(mean_uber_load, z),
+                                  sense=grb.GRB.LESS_EQUAL,
+                                  rhs=maximum_uber - simulator.uber_hours,
+                                  name='UberConstraint')
+
+        print(time.time() - start_time, '- Model Params...')
+        model.setParam('MIPGap', .1)
+        
+        print(time.time() - start_time, '- Solving the model...')
+        status = model.optimize()
+        print(time.time() - start_time, '- Done!')
+
         print()
-        return {}
+        return final_positions, final_repositioning
+
+class MaxExpectedSurvivalRelocatorOnlyBorough(RelocationModel):
+
+    def __init__(self):
+        super().__init__()
+
+    def SurvivalFunction(self, response_times):
+        #return np.ones(shape = response_times.shape)
+        return (1+np.exp(0.679+.262*response_times))**-1
+
+    def relocate(self,
+                 simulator: "Models.EMSModel",
+                 params: "Models.SimulationParameters",
+                 borough = None) -> Tuple[List[List[str]], Dict["Models.Vehicle", str]]:
+
+        # Initialize return list
+        # This list will hold the final optimal positions of the ambulances
+        final_positions: List = []
+
+        # Initialize the return dict
+        # This will hold the vehicle repositioning values
+        final_repositioning: Dict["Models.Vehicle", str] = {}
+
+        # Parameters
+        actual_ALS_vehicles = {v.to_node: v for v in simulator.getAvaliableVehicles(0, borough)}
+        actual_BLS_vehicles = {v.to_node: v for v in simulator.getAvaliableVehicles(1, borough)}
+        neighbor_k = params.neighbor_k
+        neighborhood = params.neighborhood
+        ambulance_distribution = params.ambulance_distribution
+        D_rates = params.demand_rates
+        Busy_rates = params.mean_busytime
+        Q = params.Q
+        P = params.P
+        C = params.candidates_borough[borough]
+        D = params.demand_borough[borough]
+        t = simulator.timePeriod()
+
+        overload_penalty = params.overload_penalty
+        maximum_uber = params.maximum_uber_per_period
+        cand_cand_time = params.cand_cand_time
+
+        ########################
+        #    First ALS part    #
+        ########################
+
+        # First stage
+        start_time = time.time()
+        print('0 - Starting first stage')
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="First stage optimal positions")
+        # Declare model variables
+        print(time.time() - start_time, '- Declaring Variables...')
+
+        y = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node)
+             for j, node in enumerate(C)]
+
+        x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + str(k) + '_' + node)
+                        for k in range(neighbor_k[t][node]+1)]
+                        for node in C]
+        # Coefficients
+        # ------------
+        # [j, i] matrix
+        print(time.time() - start_time, '- Computing O.F. coefficients...')
+        survival_matrix = self.SurvivalFunction(params.cand_demand_time[t])
+
+        # Filter the survival matrix leaving only the nodes that are reachable,
+        # 0 to all the rest
+        filtered_survival = np.array([[survival_matrix[j, i] if c_node in params.reachable_inverse[t][d_node] else 0        # noqa E501
+                                       for j, c_node in enumerate(C)]
+                                       for i, d_node in enumerate(D)]).T
+
+        # [j, i] matrix respresenting S_{i,j} * d_i
+        coefficients = D_rates[0].loc[t+1, D].values * filtered_survival                      # noqa E501
+        
+        # Objective function
+        print(time.time() - start_time, '- Setting O.F...')
+        availability = [grb.LinExpr([Q[j][k] for k in range(neighbor_k[t][node])],
+                        [x[j][k] for k in range(neighbor_k[t][node])]) for j, node in enumerate(C)]       # noqa E501
+
+
+        
+        model.setObjective(grb.quicksum(grb.quicksum(coefficients[C.index(c_node),i]*availability[C.index(c_node)] 
+                           if c_node in C else 0
+                           for c_node in params.reachable_inverse[t][d_node])
+                           for i, d_node in enumerate(D)))
+        model.ModelSense = grb.GRB.MAXIMIZE
+
+        print(time.time() - start_time, '- Constraints...')
+        # Constraints
+        # Capacity constraint
+        Cap_constraint = model.addConstr(lhs=grb.quicksum(y),
+                                             sense=grb.GRB.EQUAL,
+                                             rhs=len(actual_ALS_vehicles),
+                                             name='CapacityConstraint')
+
+        #Cap_constraint = {b: model.addConstr(lhs=grb.quicksum(y[j] for j in range(len(C))),
+        #                                     sense=grb.GRB.EQUAL,
+        #                                     rhs=ambulance_distribution[0][b],
+        #                                     name='CapacityConstraint_{}'.format(b)) for b in range(6)}
+        # Constraint 1
+        Const_1 = {j: model.addConstr(lhs=grb.quicksum(x[j]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
+        # Constraint 2
+        Const_2 = {j: model.addConstr(lhs=grb.quicksum(y[C.index(u)] if u in C else 0
+                                                       for u in params.neighborhood_candidates[t][c_node]),    # noqa E501
+                                      sense=grb.GRB.EQUAL,
+                                      rhs=grb.LinExpr(list(range(len(x[j]))), x[j]),
+                                      name='Const_2_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
+
+        print(time.time() - start_time, '- Model Params...')
+        model.setParam('MIPGap', .1)
+        model.setParam('TimeLimit', 45)
+        
+        print(time.time() - start_time, '- Solving the model...')
+        status = model.optimize()
+
+        print(time.time() - start_time, '- Done!')
+
+        # -------------------------
+        ########################
+        #   Second ALS part    #
+        ########################
+
+        print(time.time() - start_time, '- Starting first stage part 2')
+
+        actual_positions = [actual_ALS_vehicles[v].to_node for v in actual_ALS_vehicles]
+        target_positions = []
+        for j in range(len(C)):
+            if y[j].x == 1:
+                target_positions.append(C[j])
+        
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="First stage optimal relocations")
+
+        print(time.time() - start_time, '- Declaring Variables...')
+        x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + i + '_' + j)
+              for j in target_positions]
+              for i in actual_positions]
+        
+        y = [model.addVar(vtype=grb.GRB.CONTINUOUS, lb=0, name='y_' + i)
+             for i in actual_ALS_vehicles]
+
+        print(time.time() - start_time, '- Computing coefficents...')
+        weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(simulator.timePeriod())
+        travel_times = np.array(simulator.city_graph.shortest_paths(actual_positions, target_positions, weights))
+
+        print(time.time() - start_time, '- Setting O.F...')
+        model.setObjective(grb.quicksum(grb.LinExpr(travel_times[i], x[i])
+                            for i in range(len(actual_positions)))
+                            + overload_penalty*grb.quicksum(y))
+        model.ModelSense = grb.GRB.MINIMIZE
+
+        print(time.time() - start_time, '- Constraints...')
+        # Constraint 1
+        Const_1 = {i: model.addConstr(lhs=grb.quicksum(x[i]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(i)) for i in range(len(actual_positions))}
+        # Constraint 2
+        Const_2 = {j: model.addConstr(lhs=grb.quicksum(x[i][j] for i in range(len(actual_positions))),
+                                      sense=grb.GRB.GREATER_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(j)) for j in range(len(target_positions))}
+        # Constraint 3
+        # TODO: Check rhs
+        Const_3 = {i: model.addConstr(lhs=actual_ALS_vehicles[node].reposition_workload + \
+                                          grb.LinExpr(travel_times[i], x[i]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=y[i],
+                                      name='Const_1_{}'.format(i)) for i, node in enumerate(actual_positions)}
+
+        print(time.time() - start_time, '- Model Params...')
+        model.setParam('MIPGap', .1)
+        
+        print(time.time() - start_time, '- Solving the model...')
+        status = model.optimize()
+        print(time.time() - start_time, '- Done!')
+        
+        # Update positions for first stage
+        final_positions.append(target_positions)
+
+        reposition_matrix = [[x[i][j].x for j in range(len(target_positions))] for i in range(len(actual_positions))]
+        for i, node in enumerate(actual_positions):
+            final_repositioning[actual_ALS_vehicles[node]] = target_positions[reposition_matrix[i].index(1)]
+
+
+        # -------------------------------------------------------------------------------------------------------------------
+
+        ########################
+        #    First BLS part    #
+        ########################
+
+        # Start the second stage
+        print(time.time() - start_time, '- Starting second stage')
+
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="Second stage optimal positions")
+
+        # Declare model variables
+        print(time.time() - start_time, '- Declaring Variables...')
+
+        y = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node)
+             for j, node in enumerate(C)]
+
+        z = [model.addVar(vtype=grb.GRB.INTEGER, name='z_' + node)
+             for j, node in enumerate(C)]
+
+        x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + str(k) + '_' + node)
+                        for k in range(neighbor_k[t][node]+1)]
+                        for node in C]
+
+        # Coefficients
+        # ------------
+        print(time.time() - start_time, '- Computing borough demand...')
+        borough_demand = np.array([np.sum(P[D.index(d), 1] for d in borough_demand[b]) for b in range(1,6)])
+        borough_demand = borough_demand/np.sum(borough_demand)
+
+        # Allocate the ALS ambulances to each borough
+        n_total = len(actual_BLS_vehicles)
+        n_allocated = 0
+        allocated_ambulances = [0]
+        for b in range(5-1):
+            n_allocated += int(n_total * borough_demand[b])
+            allocated_ambulances.append(int(n_total * borough_demand[b]))
+        allocated_ambulances.append(int(n_total - n_allocated))
+
+        # [j, i] matrix
+        print(time.time() - start_time, '- Computing O.F. coefficients...')
+
+        # Filter the survival matrix leaving only the nodes that are reachable,
+        # 0 to all the rest
+        filtered_survival = np.array([[1 if c_node in params.reachable_inverse[t][d_node] else 0        # noqa E501
+                                       for j, c_node in enumerate(C)]
+                                       for i, d_node in enumerate(D)]).T
+
+        # [j, i] matrix respresenting S_{i,j} * d_i
+        coefficients = params.demand_rates[1].loc[t+1, params.demand_nodes].values * filtered_survival                      # noqa E501
+        
+        # Objective function
+        print(time.time() - start_time, '- Setting O.F...')
+        availability = [grb.LinExpr([P[j][k] for k in range(neighbor_k[t][node])],
+                        [x[j][k] for k in range(neighbor_k[t][node])]) for j, node in enumerate(C)]       # noqa E501
+        
+        model.setObjective(grb.quicksum(grb.quicksum(coefficients[C.index(c_node),i]*availability[C.index(c_node)] 
+                           for c_node in params.reachable_inverse[t][d_node])
+                           for i, d_node in enumerate(D)))
+        model.ModelSense = grb.GRB.MAXIMIZE
+
+        print(time.time() - start_time, '- Constraints...')
+        # Constraints
+        # Capacity constraint
+        Cap_constraint = {b: model.addConstr(lhs=grb.quicksum(y[C.index(c)] for c in borough_cand[b]),
+                                             sense=grb.GRB.EQUAL,
+                                             rhs=allocated_ambulances[b],
+                                             name='CapacityConstraint_{}'.format(b)) for b in range(6)}
+        # Constraint 1
+        Const_1 = {j: model.addConstr(lhs=grb.quicksum(x[j]),
+                                      sense=grb.GRB.LESS_EQUAL,
+                                      rhs=1,
+                                      name='Const_1_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
+        # Constraint 2
+        Const_2 = {j: model.addConstr(lhs=grb.quicksum(y[C.index(u)] + z[C.index(u)] for u in params.neighborhood_candidates[t][c_node]),
+                                      sense=grb.GRB.EQUAL,
+                                      rhs=grb.LinExpr(list(range(len(x[j]))), x[j]),
+                                      name='Const_2_{}'.format(j)) for j, c_node in enumerate(C)}                            # noqa E501
+        
+        # Constraint 3
+        mean_uber_load = [Busy_rates[1].loc[t+1,neighborhood[t][j]].mean() for j in C]
+        Const_3 = model.addConstr(lhs=grb.LinExpr(mean_uber_load, z),
+                                  sense=grb.GRB.LESS_EQUAL,
+                                  rhs=maximum_uber - simulator.uber_hours,
+                                  name='UberConstraint')
+
+        print(time.time() - start_time, '- Model Params...')
+        model.setParam('MIPGap', .1)
+        
+        print(time.time() - start_time, '- Solving the model...')
+        status = model.optimize()
+        print(time.time() - start_time, '- Done!')
+
+        print()
+        return final_positions, final_repositioning

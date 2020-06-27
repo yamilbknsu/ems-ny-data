@@ -23,18 +23,23 @@ class Vehicle(Sim.SimulationEntity):
     def __init__(self,
                  start_node: str,
                  vehicle_type: int,
+                 borough: int,
                  name: str = None,
                  default_speed: float = 5.0):
         super().__init__(name)
         self.speed: float = default_speed
         self.patient: Optional[Emergency] = None
         self.type = vehicle_type
+        self.borough = borough
 
         self.stopMoving()                   # Though obviously is not
         self.path: List[int] = []
         self.node_path: List[str] = []
         self.expected_arrival: float = 0    # Expected arrival time to next node    
         self.teleportToNode(start_node)
+
+        # The time spent repositioning
+        self.reposition_workload = 0
 
     def teleportToNode(self, node: str):
         """
@@ -119,6 +124,8 @@ class SimulationParameters:
                  neighborhood: List[Dict[str, List[str]]],
                  neighborhood_candidates,
                  neighbor_k: List[Dict[str, int]],
+                 candidates_borough,
+                 demand_borough,
                  reachable_demand: List[Dict[str, List[str]]],
                  reachable_inverse: List[Dict[str, List[str]]],
                  simulation_time: float = 3600,
@@ -131,6 +138,8 @@ class SimulationParameters:
                                                          3: ['42855606', '42889788']},
                  candidate_nodes: List[str] = ['42862892'],
                  demand_nodes: List[str] = ['42858015'],
+                 overload_penalty: float = 1000,
+                 maximum_uber_per_period: float = 0,
                  random_seed: float = 420):
         """
         Parameters for the simulation
@@ -180,20 +189,62 @@ class SimulationParameters:
         self.neighborhood = neighborhood
         self.neighborhood_candidates = neighborhood_candidates
         self.neighbor_k = neighbor_k
+        self.candidates_borough = candidates_borough
+        self.demand_borough = demand_borough
         self.reachable_demand = reachable_demand
         self.reachable_inverse = reachable_inverse
+
+        # Hyper-Parameters
+        self.overload_penalty = overload_penalty
+        self.maximum_uber_per_period = maximum_uber_per_period
 
         # Set the RNG seed
         np.random.seed(self.random_seed)
 
-        #self.reachable_matrix = np.array([[[1 if c_node in self.reachable_inverse[t][d_node]
-        #                                    else 0
-        #                                    for c_node in self.candidate_nodes]
-        #                                   for d_node in self.demand_nodes]
-        #                                  for t in range(len(time_periods))])
+        candidates_with_borough = candidates_borough[1] + candidates_borough[2] + candidates_borough[3] + \
+                                  candidates_borough[4] + candidates_borough[5]
+        self.candidates_borough[0] = list(set(candidate_nodes) - set(candidates_with_borough))
+
+        self.computeQandP(0)
+
+        # Compute ambulance distribution
+        borough_demand = np.array([np.sum(self.demand_rates[0][d][1] for d in demand_borough[b]) for b in range(1,6)])
+        borough_demand = borough_demand/np.sum(borough_demand)
+
+        # Allocate the ALS ambulances to each borough
+        self.ambulance_distribution = []
+        for v in range(2):
+            n_total = n_vehicles[0][v]
+            n_allocated = 0
+            allocated_ambulances = [0]
+            for b in range(5-1):
+                n_allocated += int(n_total * borough_demand[b])
+                allocated_ambulances.append(int(n_total * borough_demand[b]))
+            allocated_ambulances.append(int(n_total - n_allocated))
+
+            self.ambulance_distribution.append(allocated_ambulances)
         
     def getSpeedList(self, time_period):
         return list(self.speeds_df['p' + str(time_period+1) + 'n'])
+
+    def computeQandP(self, t):
+        neighbor_k = self.neighbor_k
+        neighborhood = self.neighborhood
+        D_rates = self.demand_rates
+        Busy_rates = self.mean_busytime
+        C = self.candidate_nodes
+
+        self.Q = np.array([[np.sum(D_rates[0].loc[t+1, neighborhood[t][j]] * 
+                                        Busy_rates[0].loc[t+1, neighborhood[t][j]]) for j in C]]).T
+        self.Q = self.Q @ np.array([[1/k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)]])
+        self.Q = 1-np.power(self.Q, [k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)])
+        self.Q[self.Q < 0] = 0
+
+        self.P = np.array([[np.sum(D_rates[0].loc[t+1, neighborhood[t][j]] * 
+                                        Busy_rates[0].loc[t+1, neighborhood[t][j]]) for j in C]]).T
+        self.P = self.P @ np.array([[1/k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)]])
+        self.P = 1-np.power(self.P, [k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)])
+        self.P[self.P < 0] = 0
 
 class EMSModel(Sim.Simulator):
 
@@ -201,6 +252,7 @@ class EMSModel(Sim.Simulator):
                  city_graph: igraph.Graph,
                  generator_object: Generators.ArrivalGenerator,
                  dispatcher: Solvers.DispatcherModel,
+                 repositioner: Solvers.RelocationModel,
                  parameters: SimulationParameters):
 
         super().__init__()
@@ -208,6 +260,7 @@ class EMSModel(Sim.Simulator):
         self.city_graph: igraph.Graph = city_graph
         self.generator_object: Generators.ArrivalGenerator = generator_object
         self.assigner: Solvers.DispatcherModel = dispatcher
+        self.repositioner: Solvers.RelocationModel = repositioner
         self.arrival_generator = self.generator_object.generator(self)
 
         self.parameters = parameters
@@ -226,6 +279,12 @@ class EMSModel(Sim.Simulator):
                             pos_list.append(node)
                             break
                 parameters.initial_nodes.append(pos_list)
+        
+        # The last reposition status
+        self.ambulance_stations = parameters.initial_nodes
+
+        # The amount of uber hours used in this period
+        self.uber_hours = 0
 
         # Creating the objects for the ambulances
         self.vehicles: List[Vehicle] = list()
@@ -234,10 +293,19 @@ class EMSModel(Sim.Simulator):
 
         n = 0
         for v in range(parameters.vehicle_types):
+            cumulative_distribution = np.cumsum(parameters.ambulance_distribution[v])
+            b = 1
+            i = 0
+
             for m in range(parameters.n_vehicles[0][v]):
+                # Compute the corresponding borough
+                if i == cumulative_distribution[b]:
+                    b += 1
+
                 self.insert(Events.AmbulanceArrivalEvent(self, 0, parameters.initial_nodes[v][m],           
-                            Vehicle(parameters.initial_nodes[v][m], v, 'Ambulance ' + str(n))))             
+                            Vehicle(parameters.initial_nodes[v][m], v, b,'Ambulance ' + str(n))))             
                 n += 1
+                i += 1
 
         # Lists representing the state of the model
         self.activeEmergencies: List[Emergency] = list()        # All the emergencies in the system         
@@ -255,11 +323,14 @@ class EMSModel(Sim.Simulator):
             self.insert(Events.EndSimulationEvent(self, simulation_time))
         self.do_all_events()
 
-    def getAvaliableVehicles(self, v_type: Optional[int] = None) -> List[Vehicle]:                          
+    def getAvaliableVehicles(self, v_type: Optional[int] = None, borough: Optional[int] = None) -> List[Vehicle]:
+        to_check_vehicles = self.vehicles
+        if borough is not None:
+            to_check_vehicles = [v for v in self.vehicles if v.borough == borough] 
         if v_type is not None:
-            return [v for v in self.vehicles if v.patient is None and v.type == v_type]                     
+            return [v for v in to_check_vehicles if v.patient is None and v.type == v_type]                     
         else:
-            return [v for v in self.vehicles if v.patient is None]
+            return [v for v in to_check_vehicles if v.patient is None]
 
     def getHospitalType(self, emergency: "Emergency") -> int:
         return 1

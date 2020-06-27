@@ -1,0 +1,32 @@
+At some point I found it necessary to write this file
+recalling all the steps performed in order to get the spatial
+info needed to run the model. This is because many parts involve
+the interaction of several systems and so if any error is spotted
+a lot of steps will have to be recalculated, which can very easily
+spiral into a nightmare.
+
+1. Download OSM raw data with the OSMDownloader script
+ - For this you also have to input a boundary file that contains only
+   one polygon used to crop the streets and nodes outside it (because the
+   downloader takes a squared bounding box)
+
+ -> This will save an output of edges and nodes as shapefiles
+
+2. Use the function apply_speed_data from the same script to the edges from last part
+ - Of course, you also need the hourly speed data recovered from uber movement site
+
+ -> Outputs a dataframe with the hourly speeds associated with each street which you'll
+    have to save by yourself (example code below function definitions)
+
+3. Use the graph_generator script with step (1) outputs as input
+
+ -> The outputs are a shapefile with the full set of edges (with duplicated where needed)
+    and a pickle file containing the first igraph object
+
+4. Polish this graph with graph_reviser, the main reason for this are the
+   groups of vertices that are disconnected from the main graph (around 1000 in NY)
+
+ -> Outputs a final set of nodes as a shapefile and the final igraph
+
+5. dipatchAnalysis script takes uses the set of available nodes so make sure of recomputing
+   this after (4) and before running the model

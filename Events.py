@@ -300,7 +300,7 @@ class AmbulanceStartMovingEvent(Sim.Event):
             .format(vehicle.name, edge['v'], edge['edgeid'])
 
     def execute(self, simulator: "Models.EMSModel"):
-        self.travel_time = self.edge['length']/self.vehicle.speed
+        self.travel_time = self.edge['length']/simulator.parameters.getSpeedList(simulator.timePeriod())[self.edge.index]
         self.vehicle.onMovingToNextNode(simulator.now() + self.travel_time)
 
         # Schedule vehicle arrival to node

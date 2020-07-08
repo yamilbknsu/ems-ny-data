@@ -205,8 +205,7 @@ class SimulationParameters:
     def getSpeedList(self, time_period: int):
         """
         Get the list of the speeds for each edge on the graph
-        for the corresponding time period, in the order they appear
-        on the speeds_df.
+        for the corresponding time period, in the requested order.
 
         Args:
             time_period (int): Index of the time period (0-indexed)
@@ -253,22 +252,35 @@ class SimulationParameters:
 
 class Vehicle(Sim.SimulationEntity):
     """
-    Vechicle that can move through a graph.
+    Object representing a vechicle that can move through a graph.
+    This object holds information about the current state of the vehicle.
+    This includes, among other things, the list of edge elements that
+    are part of the actual route, a reference to an emergency instance
+    if attending any and the actual position of the vehicle.
 
 
-    In principle I could then extend this class to an ambulance class
+    In principle we could then extend this class to an ambulance class
     but since there won't be any other kind of vehicles in the model,
-    I'll just take this as a synonym for ambulance.
+    We'll just take this as a synonym for ambulance.
+
+    Properties of the class:
+    
+    patient (Emergency, optional): Emergency object of the actual patient
     """
 
     def __init__(self,
                  start_node: str,
                  vehicle_type: int,
                  borough: int,
-                 name: str = None,
-                 default_speed: float = 5.0):
+                 name: str = None):
+        """
+        Args:
+            start_node (str): Starting node for the ambulance.
+            vehicle_type (int): int describing which type of vehicle this is (ALS: 0, BLS: 1).
+            borough (int): Borough to which this vehicle belongs to.
+            name (str, optional): [description]. Defaults to None.
+        """
         super().__init__(name)
-        self.speed: float = default_speed
         self.patient: Optional[Emergency] = None
         self.type = vehicle_type
         self.borough = borough
@@ -280,7 +292,7 @@ class Vehicle(Sim.SimulationEntity):
         self.teleportToNode(start_node)
 
         # The time spent repositioning
-        self.reposition_workload = 0
+        self.reposition_workload: float = 0
 
     def teleportToNode(self, node: str):
         """
@@ -444,7 +456,7 @@ class EMSModel(Sim.Simulator):
                                                   self.parameters.simulation_time))                         
         else:
             self.insert(Events.EndSimulationEvent(self, simulation_time))
-        self.do_all_events()
+        self.doAllEvents()
 
     def getAvaliableVehicles(self, v_type: Optional[int] = None, borough: Optional[int] = None) -> List[Vehicle]:
         to_check_vehicles = self.vehicles

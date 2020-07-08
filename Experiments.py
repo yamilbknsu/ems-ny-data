@@ -103,7 +103,7 @@ sim_parameters = Models.SimulationParameters(
                 maximum_uber_per_period = 0
 )
 
-#simulator: Models.EMSModel = Models.EMSModel(graph, generator, Solvers.PreparednessDispatcher(), Solvers.MaxExpectedSurvivalRelocator(), sim_parameters)
-#simulator.run()
+simulator: Models.EMSModel = Models.EMSModel(graph, generator, Solvers.PreparednessDispatcher(), Solvers.MaxExpectedSurvivalRelocator(), sim_parameters)
+simulator.run()
 
 #simulator.recorder.saveToJSON(DATA_DIR + 'JSON events//events2.json')

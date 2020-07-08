@@ -135,7 +135,7 @@ def computeDemandValues(_preprocesing_df_dir,
         with open(save_dir + '/mean_activity_time_{}.pickle'.format(names[i]), 'wb') as f:
             pickle.dump(mean_busytime, f)
 
-def computePreprocessingData(candidates_df, demand_df,
+def computePreprocessingData(candidates_df, demand_df, hospital_df,
                               base_nodes_w_borough, city_graph, 
                               speeds_df, save_dir,
                               reachable_limits = 8*60):
@@ -159,6 +159,13 @@ def computePreprocessingData(candidates_df, demand_df,
     
     with open(save_dir + "candidate_borough.pickle", 'wb') as f:
         pickle.dump(candidate_borough, f)
+
+    # Compute the graph points for the hospitals
+    print('Computing Hospital nodes...')
+    hospital_nodes = list(set(nearest_neighbor(hospital_df, base_nodes_w_borough, 1)['osmid']))
+
+    with open(save_dir + "hospital_nodes.pickle", 'wb') as f:
+        pickle.dump(hospital_nodes, f)
     
     # Compute the graph points for the demands
     print('Computing demand nodes...')
@@ -278,13 +285,16 @@ def computePreprocessingData(candidates_df, demand_df,
 
 if __name__ == "__main__":
     # Load the original candidates and nodes
-    original_candidates = gpd.read_file(DATA_DIR + 'NYC Graph/EMScandidates.geojson')                   # noqa E501
+    original_candidates = gpd.read_file(DATA_DIR + 'NYC Graph/EMScandidatesMixed.geojson')
 
     # Load the nodes of the graph with borough
-    graph_nodes = gpd.read_file(DATA_DIR + 'NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')                       # noqa E501
+    graph_nodes = gpd.read_file(DATA_DIR + 'NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
 
     # Load the uniform demand points
-    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform1km/Uniform1kmDemand.shp')   # noqa E501
+    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform1km/Uniform1kmDemand.shp')
+
+    # Load the hospital points
+    hospital_df = gpd.read_file(DATA_DIR + 'Generated Shapefiles/NYC_Hospitals/NYC_Hospitals.geojson')
 
     # Load the igraph
     with open(DATA_DIR + "NYC Graph//NYC_graph_revised.pickle", 'rb') as f:
@@ -298,4 +308,4 @@ if __name__ == "__main__":
     speeds.index = speeds['edgeid']
     speeds = speeds.loc[city_graph.es['edgeid'], :]
 
-    computePreprocessingData(original_candidates, demand_points, graph_nodes, city_graph, speeds, DATA_DIR + 'Preprocessing Values//1km//')
+    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, DATA_DIR + 'Preprocessing Values//Mixed//')

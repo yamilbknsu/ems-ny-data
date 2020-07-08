@@ -1,5 +1,6 @@
 # flake8: noqa
 import time
+import json
 import matplotlib.pyplot as plt
 
 from typing import Optional
@@ -51,13 +52,17 @@ class Event:
 
 class Simulator(AbstractSimulator):
 
-    def __init__(self, metrics = {}, verbose = True):
+    def __init__(self, metrics = {}, verbose = True, attachRecorder = True):
         super().__init__()
         self.time = 0
         self.metrics = metrics
         self.verbose = verbose
 
         self.events = ListQueue()
+
+        self.recorder = None
+        if attachRecorder:
+            self.recorder = EventRecorder()            
 
     def now(self):
         return self.time
@@ -66,22 +71,41 @@ class Simulator(AbstractSimulator):
         self.start_time = time.time()
         
         while self.events.size() > 0:
-            e = self.events.remove_first()
-            if self.verbose:
-                print(secondsToTimestring(e.time), e.message)
-
-            self.time = e.time
-
-            # Handling chained events
-            chained_event = e.execute(self)
-            while chained_event is not None:
-                if self.verbose:
-                    print('{:>17}'.format('### Chained:'), chained_event.message)
-                chained_event = chained_event.execute(self)
+            self.doOneEvent()
 
         self.recoverMetrics() 
         return self.metrics
     
+    def doOneEvent(self):
+        """
+        Execute the first event in the queue and
+        all of its consecutive chained events
+
+        Returns:
+            List[Event]: A list with instances of the executed events
+        """        
+        e = self.events.remove_first()
+        if self.verbose:
+            print(secondsToTimestring(e.time), e.message)
+
+        self.time = e.time
+
+        # Handling chained events
+        chained_event = e.execute(self)
+        to_record_events = [e]
+
+        while chained_event is not None:
+            to_record_events.append(chained_event)
+
+            if self.verbose:
+                print('{:>17}'.format('### Chained:'), chained_event.message)
+            chained_event = chained_event.execute(self)
+
+        for event in to_record_events:
+            self.recorder.record(event)
+        
+        return to_record_events
+
     def recoverMetrics(self):
         pass
 
@@ -255,3 +279,7 @@ class EventRecorder:
         output_events = [{**{key:str(value) for key, value in e.__dict__.items()}, **{'type':type(e).__name__}} for e in self.executed_events]
         self.executed_events = []
         return output_events
+
+    def saveToJSON(self, dir):
+        with open(dir, 'w') as outfile:
+            json.dump(self.getEvents(), outfile)

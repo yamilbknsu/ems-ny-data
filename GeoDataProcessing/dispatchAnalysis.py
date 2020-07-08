@@ -141,6 +141,6 @@ if __name__ == "__main__":
             severity_level = 1
             if setup == 'LS19':
                 severity_level = 2
-            arrivalShpToArrivalEvents(gdfs[-1], nodes, datetime(2020, 1, 5), save_dir+save_name, 1, severity_level=severity_level)
+            arrivalShpToArrivalEvents(gdfs[-1], nodes, datetime(2020, 1, 6), save_dir+save_name, 1, severity_level=severity_level)
 
     print()

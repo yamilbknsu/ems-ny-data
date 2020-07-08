@@ -1,10 +1,8 @@
 .mypy_cache/
 DL Data/
 Generated Shapefiles/
-sandbox/
 data/
 __pycache__/
-sandbox/
-Arrival Events/
 NYC Graph/
 Preprocessing Values/
+JSON events/

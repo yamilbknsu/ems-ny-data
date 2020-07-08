@@ -20,12 +20,55 @@ class DebugEvent(Sim.Event):
         self.message: str = 'Debug Event'
 
     def execute(self, simulator: "Models.EMSModel"):
-        optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = 1)
-        simulator.ambulance_stations[0] = optimal_positions[0]
-        
-        for v in reposition_dict:
-            v.teleportToNode(reposition_dict[v])
+        pass
 
+
+class RelocationEvent(Sim.Event):
+
+    def __init__(self,
+                entity: object,
+                time: float,
+                name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.message: str = 'Relocation Event'
+
+    def execute(self, simulator: "Models.EMSModel"):
+        for b in range(1, 6):
+            optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = b)
+            simulator.ambulance_stations[b] = optimal_positions
+
+            for v in reposition_dict:
+                simulator.insert(TripAssignedEvent(simulator, simulator.now(), v, reposition_dict[v]))
+
+
+class InitialPositioningEvent(Sim.Event):
+
+    def __init__(self,
+                 entity: object,
+                 time: float,
+                 name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.message: str = 'Computing starting positions'
+
+    def execute(self, simulator: "Models.EMSModel"):
+        # For getting the information on the visualization
+        self.new_positions = []
+
+        for b in range(1,6):
+            optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = b)
+            simulator.ambulance_stations[b] = optimal_positions
+            
+            for v in reposition_dict:
+                v.teleportToNode(reposition_dict[v])
+                simulator.registerVehicleStationChange(v, reposition_dict[v])
+
+                self.new_positions.append([v.name, reposition_dict[v]])
+        
+        simulator.insert(RelocationEvent(simulator, simulator.now() + 600))
 
 class EmergencyLeaveSystemEvent(Sim.Event):
 
@@ -134,6 +177,8 @@ class AmbulanceEndTripEvent(Sim.Event):
                 return EmergencyLeaveSystemEvent(self.entity, simulator.now(),
                         self.vehicle.patient, True, vehicle=self.vehicle, chain_assignment=True)
 
+        simulator.registerVehicleStationChange(self.vehicle, self.vehicle.pos)
+
 
 class AmbulanceArriveToNodeEvent(Sim.Event):
 
@@ -172,18 +217,36 @@ class TripAssignedEvent(Sim.Event):
         self.vehicle = vehicle
         self.node = node
         self.message: str = "{} assigned to move to node {}".format(vehicle.name, node)
-    
-    def execute(self, simulator: "Models.EMSModel"):
-        # Compute shortest path for vehicle
-        path: List[List[int]] = simulator.getShortestPath(self.vehicle.pos,self.node)
 
-        # onAssigned callback
-        self.vehicle.onAssignedMovement(path[0], [simulator.city_graph.es[p]['v'] for p in path[0]])
-        
-        # Schedule the start of the movement for the vehicle
-        self.vehicle.onArrivalToNode(self.vehicle.pos)
-        simulator.insert(AmbulanceStartMovingEvent(self.vehicle, simulator.now(), self.vehicle,
-                            simulator.city_graph.es[self.vehicle.actual_edge]))
+    def execute(self, simulator: "Models.EMSModel"):
+        if self.node != self.vehicle.pos:
+            if not self.vehicle.moving:
+                # Compute shortest path for vehicle
+                path: List[List[int]] = simulator.getShortestPath(self.vehicle.pos, self.node)
+
+                # onAssigned callback
+                self.vehicle.onAssignedMovement(path[0], [simulator.city_graph.es[p]['v'] for p in path[0]])
+
+                # Schedule the start of the movement for the vehicle
+                self.vehicle.onArrivalToNode(self.vehicle.pos)
+                simulator.insert(AmbulanceStartMovingEvent(self.vehicle, simulator.now(), self.vehicle,
+                                simulator.city_graph.es[self.vehicle.actual_edge]))
+            else:
+                # Compute shortest path for vehicle
+                path = simulator.getShortestPath(self.vehicle.to_node, self.node)
+                
+                # onAssigned callback
+                self.vehicle.onAssignedMovement(path[0], [simulator.city_graph.es[p]['v'] for p in path[0]])
+                
+                # Clear the scheduled vehicle movement
+                simulator.clearVehicleMovement(self.vehicle)
+                
+                # Schedule the start of the movement for the vehicle in the new route
+                simulator.insert(AmbulanceStartMovingEvent(self.vehicle, self.vehicle.expected_arrival, self.vehicle,
+                                simulator.city_graph.es[self.vehicle.actual_edge]))
+            
+            # Recover the position logic
+            simulator.registerVehicleStationChange(self.vehicle, self.node)
 
 
 class AssignedEvent(Sim.Event):
@@ -323,6 +386,7 @@ class AmbulanceArrivalEvent(Sim.Event):
 
     def execute(self, simulator: "Models.EMSModel"):
         simulator.vehicles.append(self.vehicle)
+        simulator.registerVehicleStationChange(self.vehicle, self.node)
 
 
 class EndSimulationEvent(Sim.Event):

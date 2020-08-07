@@ -12,6 +12,16 @@ from fastapi import FastAPI
 from typing import List
 
 
+def secondsToTimestring(seconds: float) -> str:
+    days = int(seconds // 86400)
+    seconds = seconds % 86400
+    hours = int(seconds // 3600)
+    seconds = seconds % 3600
+    minutes = int(seconds // 60)
+    seconds = seconds % 60
+
+    return 'day {} {:02d}:{:02d}:{:0>5}'.format(days, hours, minutes, '{:.2f}'.format(seconds))
+
 class AsyncEMSModel(Models.EMSModel):
 
     def __init__(self,

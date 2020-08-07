@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from heapq import heappush, heappop, heapify
 
 from typing import Optional
+import matplotlib.pyplot as plt
 
 def secondsToTimestring(seconds: float) -> str:
     days = int(seconds // 86400)
@@ -213,36 +214,36 @@ class Simulator(AbstractSimulator):
         self.recoverMetrics() 
         return self.metrics
     
-        def doOneEvent(self):
-            """
-            Execute the first event in the queue and
-            all of its consecutive chained events
+    def doOneEvent(self):
+        """
+        Execute the first event in the queue and
+        all of its consecutive chained events
 
-            Returns:
-                List[Event]: A list with instances of the executed events
-            """
-            
-            e = self.events.remove_first()
+        Returns:
+            List[Event]: A list with instances of the executed events
+        """
+        
+        e = self.events.removeFirst()
+        if self.verbose:
+            print(secondsToTimestring(e.time), e.message)
+
+        self.time = e.time
+
+        # Handling chained events
+        chained_event = e.execute(self)
+        to_record_events = [e]
+
+        while chained_event is not None:
+            to_record_events.append(chained_event)
+
             if self.verbose:
-                print(secondsToTimestring(e.time), e.message)
+                print('{:>17}'.format('### Chained:'), chained_event.message)
+            chained_event = chained_event.execute(self)
 
-            self.time = e.time
-
-            # Handling chained events
-            chained_event = e.execute(self)
-            to_record_events = [e]
-
-            while chained_event is not None:
-                to_record_events.append(chained_event)
-
-                if self.verbose:
-                    print('{:>17}'.format('### Chained:'), chained_event.message)
-                chained_event = chained_event.execute(self)
-
-            for event in to_record_events:
-                self.recorder.record(event)
-            
-            return to_record_events
+        #for event in to_record_events:
+        #    self.recorder.record(event)
+        
+        return to_record_events
     
     def recoverMetrics(self):
         """
@@ -392,7 +393,29 @@ class SimulationEntity(ABC):
         return self.name
 
 
-class StateStatistic:
+class Statistic:
+
+    def __init__(self, name, *args):
+
+        self.name = name
+
+    def record(self, *args):
+        pass
+
+    def recordAverage(self, time, value):
+        pass
+    
+    def average(self):
+        pass
+            
+    def max(self):
+        pass
+    
+    def min(self):
+        pass
+
+
+class StateStatistic(Statistic):
 
     def __init__(self, name, initial_value = 0, initial_time = 0):
 
@@ -401,7 +424,11 @@ class StateStatistic:
 
     def record(self, time, value):
         self.data.append((time, value))
-    
+
+    def recordAverage(self, time, value):
+        print("Warning: Formula not working")
+        self.data.append((self.average() * self.data[-1][0] + value*(time - self.data[-1][0]))/time)
+
     def average(self):
         avg = 0
         count = len(self.data)
@@ -414,6 +441,9 @@ class StateStatistic:
     
     def min(self):
         return min(d[1] for d in self.data)
+    
+    def sum(self):
+        return sum(d[1] for d in self.data)
 
     def visualize(self, show_mean = True):
         x = []
@@ -436,7 +466,7 @@ class StateStatistic:
         return 'StateStatistic {}: avg: {}, min: {}, max: {}'.format(self.name, 
                                 self.average(), self.min(), self.max())
 
-class TallyStatistic:
+class TallyStatistic(Statistic):
 
     def __init__(self, name):
 
@@ -459,7 +489,7 @@ class TallyStatistic:
         return 'TallyStatistic {}: avg: {}, min: {}, max: {}'.format(self.name, 
                                 self.average(), self.min(), self.max())
 
-class TimedTallyStatistic:
+class TimedTallyStatistic(Statistic):
 
     def __init__(self, name):
 
@@ -468,6 +498,13 @@ class TimedTallyStatistic:
 
     def record(self, time, value):
         self.data.append((time, value))
+    
+    def recordAverage(self, time, value):
+        if len(self.data) > 0:
+            self.data.append((time, (self.data[-1][1]*len(self.data) + value)/(len(self.data) + 1)))
+        else:
+            self.data.append((time, value))
+        #self.data.append((time, (self.average()*len(self.data) + value)/(len(self.data)+1)))
     
     def average(self):
         return sum(d[1] for d in self.data)/len(self.data) if len(self.data) != 0 else 0
@@ -490,7 +527,47 @@ class TimedTallyStatistic:
         return 'TimedTallyStatistic {}: avg: {}, min: {}, max: {}'.format(self.name, 
                                 self.average(), self.min(), self.max())
 
-class CounterStatistic:
+
+class SpatialStatistic(Statistic):
+
+    def __init__(self, name):
+
+        self.name = name
+        self.data = []
+
+    def record(self, time, pos, value):
+        self.data.append((time, pos, value))
+    
+    def recordAverage(self, time, pos, value):
+        posData = self.getDataFromPos(pos)
+        if len(posData) > 0:
+            self.data.append((time, pos, (posData[-1][2]*len(posData) + value)/(len(posData) + 1)))
+        else:
+            self.data.append((time, pos, value))
+    
+    def average(self):
+        return {p: sum(d[2] for d in self.gefDataFromPos(p))/len(self.gefDataFromPos(p)) if len(self.gefDataFromPos(p)) != 0 else 0 for p in self.getPositions()}
+
+    def getPositions(self):
+        return list(set([d[1] for d in self.data]))
+
+    def gefDataFromPos(self, pos):
+        return [d for d in self.data if d[1] == pos]
+    
+    def max(self):
+        return max(d[2] for d in self.data)
+    
+    def min(self):
+        return min(d[2] for d in self.data)
+    
+    def visualize(self, edge_color = '#70cfff', edge_width = 2, fill_color='#1ca6eb', show = True):
+        pass
+
+    def __str__(self):
+        return 'SpatialStatistic {}: avg: {}, min: {}, max: {}'.format(self.name, 
+                                self.average(), self.min(), self.max())
+
+class CounterStatistic(Statistic):
 
     def __init__(self, name):
 

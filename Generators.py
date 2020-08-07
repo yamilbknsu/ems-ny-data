@@ -36,7 +36,7 @@ class ExponentialGenerator(ArrivalGenerator):
         while True:
             nextTime: float = self.lastTime + np.random.exponential(self.mean)
             nextNode: str = simulator.city_graph.ns[np.random.randint(simulator.city_graph.vcount())]['osmid']
-            yield Events.EmergencyArrivalEvent(self, nextTime, nextNode, np.random.randint(3))
+            yield Events.EmergencyArrivalEvent(self, nextTime, nextNode, np.random.randint(3), 82)
     
 class CustomArrivalsGenerator(ArrivalGenerator):
     """

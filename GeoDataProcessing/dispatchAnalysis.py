@@ -88,16 +88,29 @@ def arrivalShpToArrivalEvents(gdf, street_nodes, simulation_start_date, save_dir
     geometry of points on WSG 84 CRS
     """
 
+    disposition_codes = [82, 83, 91, 92, 93, 94, 95, 96]
+    disposition_prob_HS = np.array([.819188, .018657, .007153, .000004, .126319, .001084, .000075, .027521])/sum([.819188, .018657, .007153, .000004, .126319, .001084, .000075, .027521])
+    disposition_prob_LS = np.array([.399125, .000565, .022335, .000010, .106771, .000464, .000124, .035278])/np.sum([.399125, .000565, .022335, .000010, .106771, .000464, .000124, .035278])
+    disposition_prob_ULS = np.array([.349892, .000183, .011662, .000002, .052106, .000285, .000076, .021123])/.43532899999999
+
     gdf['Node'] = nearest_neighbor(gdf, street_nodes, k_neighbors_sample)[id_column]
 
     events: List['Events.EmergencyArrivalEvent'] = []
     for _, row in gdf.iterrows():
         severity = severity_level
         if severity == 2:
-            if np.random.rand() > 0.57555:
+            if np.random.rand() > 0.564672:
                 severity = 3
+        
+        if severity == 1:
+            disposition_code = np.random.choice(disposition_codes, p=disposition_prob_HS)
+        elif severity == 2:
+            disposition_code = np.random.choice(disposition_codes, p=disposition_prob_LS)
+        else:
+            disposition_code = np.random.choice(disposition_codes, p=disposition_prob_ULS)
+
         events.append(Events.EmergencyArrivalEvent(None, 
-            (datetime.strptime(row[date_column], datetime_format) - simulation_start_date).total_seconds(), row['Node'], severity))
+            (datetime.strptime(row[date_column], datetime_format) - simulation_start_date).total_seconds(), row['Node'], severity, disposition_code=disposition_code))
     
     with open(save_dir, 'wb') as file:
         pickle.dump(events, file)
@@ -107,21 +120,16 @@ if __name__ == "__main__":
     DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//'
     nodes_file = 'ems-ny-data//NYC Graph//NYC_nodes_revised.geojson'
 
-
-    interval_methods = ['nsnr']
     initial_dataset_setups = ['LS19', 'HS19']
-    spatio_temporal_replications = list(range(5))
+    spatio_temporal_replications = list(range(30))
 
-    # Replication sampling for accounting for the random effect of the random node selected
-    sampling_replications = 4
     gdfs = []
     nodes = gpd.read_file(DATA_DIR + nodes_file)
 
-    for method, setup, strep in itertools.product(interval_methods,                                                         # noqa E501
-                                                  initial_dataset_setups, spatio_temporal_replications):                                # noqa E501
+    for setup, strep in itertools.product(initial_dataset_setups, spatio_temporal_replications):                                # noqa E501
 
-        arrivals_file = 'Codigos Seba//output_arrivals//{}//stkde_{}_{}.shp'.format(setup, method, strep)
-        save_dir = DATA_DIR + 'ems-ny-data//Arrival events//{}//{}//'.format(setup, method)
+        arrivals_file = 'Codigos Seba//output_arrivals//Friday//{}//stkde_nsnr_{}.shp'.format(setup, strep)
+        save_dir = DATA_DIR + 'ems-ny-data//Arrival events//Friday//{}//'.format(setup)
 
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -135,12 +143,11 @@ if __name__ == "__main__":
         
         gdfs.append(gdf)
 
-        for replica in range(sampling_replications):
-            save_name = 'strep_{}_rep_{}.pickle'.format(strep, replica)
-            print('Setting up process for {},{},{},{}'.format(method, setup, strep, replica))
-            severity_level = 1
-            if setup == 'LS19':
-                severity_level = 2
-            arrivalShpToArrivalEvents(gdfs[-1], nodes, datetime(2020, 1, 6), save_dir+save_name, 1, severity_level=severity_level)
+        save_name = 'strep_{}.pickle'.format(strep)
+        print('Setting up process for {},{}'.format(setup, strep))
+        severity_level = 1
+        if setup == 'LS19':
+            severity_level = 2
+        arrivalShpToArrivalEvents(gdfs[-1], nodes, datetime(2020, 1, 17), save_dir+save_name, 1, severity_level=severity_level)
 
     print()

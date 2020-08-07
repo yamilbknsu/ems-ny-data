@@ -1,3 +1,4 @@
+import time
 import igraph
 import numpy as np
 from typing import List, Optional
@@ -23,6 +24,53 @@ class DebugEvent(Sim.Event):
         pass
 
 
+class ComputeQandPEvent(Sim.Event):
+
+    def __init__(self,
+                entity: object,
+                time: float,
+                name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.message: str = 'Precomputing Q and P ....'
+
+    def execute(self, simulator: "Models.EMSModel"):
+        # Update the mean values in the simulation parameters
+        for key, value in simulator.time_records.items():
+            simulator.parameters.mean_busytime[key[1]].at[key[0], key[2]] = np.mean(value)
+        
+        simulator.parameters.computeQandP(simulator.timePeriod())
+
+        simulator.insert(ComputeQandPEvent(simulator, simulator.now() + 3600))
+
+
+class ShiftChangeEvent(Sim.Event):
+    
+    def __init__(self, entity: object, time: float, name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.message: str = 'Changing time period, resetting values...'
+
+    def execute(self, simulator: "Models.EMSModel"):
+        for v in simulator.vehicles:
+            v.reposition_workload = 0
+            v.statistics['RelocationTime'].record(simulator.now(), v.reposition_workload)
+
+        # Get the index of the new shift
+        actual_time = (simulator.now() % 86400) // 3600
+        c = 0
+        for s in simulator.parameters.time_shifts:
+            if actual_time < sum(simulator.parameters.time_shifts[:c+1]) * 3600:
+                break
+            c = c + 1
+        period_length = simulator.parameters.time_shifts[c]
+
+        # Schedule the change of the next time period
+        simulator.insert(ShiftChangeEvent(simulator, simulator.now() + period_length*3600))
+
+
 class RelocationEvent(Sim.Event):
 
     def __init__(self,
@@ -36,11 +84,21 @@ class RelocationEvent(Sim.Event):
 
     def execute(self, simulator: "Models.EMSModel"):
         for b in range(1, 6):
-            optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = b)
+            optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, initial=False, borough = b,
+                                                                                 workload_restrinction=simulator.parameters.apply_workload_restriction)
             simulator.ambulance_stations[b] = optimal_positions
 
             for v in reposition_dict:
+                v.station = reposition_dict[v]
                 simulator.insert(TripAssignedEvent(simulator, simulator.now(), v, reposition_dict[v]))
+
+            # Statistics
+            C = simulator.parameters.candidates_borough[b]
+            for candidate in C:
+                simulator.statistics['SpatialALSRelocation'].record(simulator.now(), candidate, 1 if candidate in optimal_positions[0] else 0)
+                simulator.statistics['SpatialBLSRelocation'].record(simulator.now(), candidate, 1 if candidate in optimal_positions[1] else 0)
+        
+        simulator.insert(RelocationEvent(simulator, simulator.now() + simulator.parameters.relocation_period))
 
 
 class InitialPositioningEvent(Sim.Event):
@@ -58,17 +116,20 @@ class InitialPositioningEvent(Sim.Event):
         # For getting the information on the visualization
         self.new_positions = []
 
-        for b in range(1,6):
-            optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = b)
-            simulator.ambulance_stations[b] = optimal_positions
-            
-            for v in reposition_dict:
-                v.teleportToNode(reposition_dict[v])
-                simulator.registerVehicleStationChange(v, reposition_dict[v])
+        if simulator.repositioner is not None:
+            for b in range(1,6):
+                optimal_positions, reposition_dict = simulator.repositioner.relocate(simulator, simulator.parameters, borough = b, initial=True)
+                simulator.ambulance_stations[b] = optimal_positions
+                
+                for v in reposition_dict:
+                    v.station = reposition_dict[v]
+                    v.teleportToNode(reposition_dict[v])
+                    simulator.registerVehicleStationChange(v, reposition_dict[v])
 
-                self.new_positions.append([v.name, reposition_dict[v]])
-        
-        simulator.insert(RelocationEvent(simulator, simulator.now() + 600))
+                    self.new_positions.append([v.name, reposition_dict[v]])
+            
+            if simulator.parameters.relocation_optimization:
+                simulator.insert(RelocationEvent(simulator, simulator.now() + simulator.parameters.relocation_period))
 
 class EmergencyLeaveSystemEvent(Sim.Event):
 
@@ -84,18 +145,40 @@ class EmergencyLeaveSystemEvent(Sim.Event):
 
         self.entity = entity
         self.emergency: "Models.Emergency" = emergency
-        self.vehicle = vehicle  # This is to safely remove the reference to the patient form the vehicle                    
+        self.vehicle = vehicle  # This is to safely remove the reference to the patient from the vehicle                    
         self.chain_assignment = chain_assignment
         self.message: str = '{} leaving the system {}'.format(emergency.name, 'satisfied' if satisfied else 'unsatisfied')  
 
     
     def execute(self, simulator: "Models.EMSModel"):
+        # Add the total time to the record
+        severity = 0 if self.emergency.severity == 1 else 1
+        simulator.time_records[(simulator.timePeriod(), severity, self.emergency.node)].append(simulator.now() - self.emergency.vehicle_assigned_time)
+
+        simulator.emergencyRecord.append((self.emergency.name, self.emergency.node, self.emergency.severity, self.emergency.arrival_time,
+                                         self.emergency.attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital))
+
         simulator.activeEmergencies.remove(self.emergency)
         if self.emergency in simulator.assignedEmergencies:
             simulator.assignedEmergencies.remove(self.emergency)
         
         if self.vehicle is not None:
             self.vehicle.patient = None
+
+            # Statistics recovery
+            simulator.statistics['EmergenciesServed'].record()
+            simulator.statistics['EmergenciesTimeInSystem'].record(simulator.now() - self.emergency.arrival_time)
+            
+            if self.emergency.severity == 1:
+                simulator.statistics['NumberHSemergencies'].record()
+            else:
+                simulator.statistics['NumberLSemergencies'].record()
+
+            self.vehicle.statistics['EmergenciesServed'].record()
+
+            if self.vehicle.isUber:
+                simulator.ubers.remove(self.vehicle)
+
         
         if self.chain_assignment:
             return AmbulanceAssignmentEvent(simulator, simulator.now())
@@ -119,13 +202,15 @@ class AmbulanceFinishAttendingEvent(Sim.Event):
         # Schedule the end of the atention
         hospital_type = simulator.getHospitalType(self.emergency)
         if hospital_type == 0:
-            return EmergencyLeaveSystemEvent(simulator, simulator.now(), self.emergency, True)
+            return EmergencyLeaveSystemEvent(simulator, simulator.now(), self.emergency, True, self.vehicle)
         else:
             # Get nearest hospital of the corresponding type
             distances = simulator.getShortestDistances(self.emergency.node, simulator.hospitals[hospital_type])[0]
-            nearest_node = simulator.hospitals[hospital_type][np.argmax(distances)]
+            nearest_node = simulator.hospitals[hospital_type][np.argmin(distances)]
 
+            self.emergency.to_hospital_time = simulator.now()
             self.emergency.markStatus(3)
+            self.emergency.hospital = nearest_node
             return TripAssignedEvent(self.emergency, simulator.now(), self.vehicle, nearest_node)
             
 
@@ -145,12 +230,42 @@ class AmbulanceStartAttendingEvent(Sim.Event):
         self.message: str = '{} started attending {}'.format(vehicle.name, emergency.name)  # noqa: E501
 
     def execute(self, simulator: "Models.EMSModel"):
+        self.emergency.start_attending_time = simulator.now()
+
         # Schedule the end of the atention
-        simulator.insert(AmbulanceFinishAttendingEvent(self.entity, simulator.now() +
-            self.emergency.attending_time, self.vehicle, self.emergency))
+        if not self.vehicle.isUber:
+            simulator.insert(AmbulanceFinishAttendingEvent(self.entity, simulator.now() +
+                self.emergency.attending_time, self.vehicle, self.emergency))
+        else:
+            simulator.insert(AmbulanceFinishAttendingEvent(self.entity, simulator.now() +
+                60, self.vehicle, self.emergency))
+
+        
+        # Statistics
+        if self.emergency.severity == 1:
+            simulator.statistics['HSAttentionTime'].record(simulator.now(), self.emergency.attending_time)
+        else:
+            simulator.statistics['LSAttentionTime'].record(simulator.now(), self.emergency.attending_time)
 
 
-class AmbulanceEndTripEvent(Sim.Event):
+class AmbulanceRedeployEvent(Sim.Event):
+
+    def __init__(self,
+                 entity: object,
+                 time: float,
+                 vehicle: "Models.Vehicle",
+                 name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.vehicle = vehicle
+        self.message: str = '{} redeploying...'.format(vehicle.name)
+
+    def execute(self, simulator: "Models.EMSModel"):
+        return TripAssignedEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.station)
+
+
+class AmbulanceEndCleaningEvent(Sim.Event):
 
     def __init__(self,
                  entity: object,
@@ -161,23 +276,85 @@ class AmbulanceEndTripEvent(Sim.Event):
 
         self.entity = entity
         self.vehicle: "Models.Vehicle" = vehicle
+        self.message: str = '{} finished cleaning, triggering redeployment'.format(vehicle.name)
+    
+    def execute(self, simulator: "Models.EMSModel"):
+        self.vehicle.statistics['State'].record(simulator.now(), 0)
+
+        self.vehicle.cleaning = False
+        return AmbulanceRedeployEvent(self.entity, simulator.now(), self.vehicle)
+
+
+class AmbulanceEndTripEvent(Sim.Event):
+
+    def __init__(self,
+                 entity: object,
+                 time: float,
+                 vehicle: "Models.Vehicle",
+                 valid: bool = True,
+                 name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.vehicle: "Models.Vehicle" = vehicle
+        self.valid = valid
         self.message: str = '{} finished trip to node {}'.format(vehicle.name, vehicle.pos)
     
     def execute(self, simulator: "Models.EMSModel"):
-        status = self.vehicle.onPathEnded()
+        if self.valid:
+            status = self.vehicle.onPathEnded()
 
-        if status == 0:
-            return AmbulanceAssignmentEvent(simulator, simulator.now())
-        elif status == 1:
-            if self.vehicle.patient is not None:
-                return AmbulanceStartAttendingEvent(self.vehicle, simulator.now(), self.vehicle,
-                    self.vehicle.patient)
-        elif status == 2:
-            if self.vehicle.patient is not None:
-                return EmergencyLeaveSystemEvent(self.entity, simulator.now(),
-                        self.vehicle.patient, True, vehicle=self.vehicle, chain_assignment=True)
+            if status == 0:
+                self.vehicle.statistics['State'].record(simulator.now(), 0)
 
-        simulator.registerVehicleStationChange(self.vehicle, self.vehicle.pos)
+                return AmbulanceAssignmentEvent(simulator, simulator.now())
+            elif status == 1:
+                if self.vehicle.patient is not None:
+                    # Statistics
+                    simulator.statistics['{}responseTime'.format('HS' if self.vehicle.patient.severity == 1 else 'LS')]\
+                                        .record(simulator.now(), simulator.now() - self.vehicle.patient.arrival_time)
+                    simulator.statistics['{}averageResponseTime'.format('HS' if self.vehicle.patient.severity == 1 else 'LS')]\
+                                        .recordAverage(simulator.now(), simulator.now() - self.vehicle.patient.arrival_time)
+                    simulator.statistics['GeneralAverageResponseTime'].recordAverage(simulator.now(), simulator.now() - self.vehicle.patient.arrival_time)
+                    simulator.statistics['SpatialGeneralAverageResponseTime'].record(simulator.now(), self.vehicle.patient.node, simulator.now() - self.vehicle.patient.arrival_time)
+
+                    if self.vehicle.patient.severity == 1:
+                        response_time = simulator.now() - self.vehicle.patient.arrival_time
+                        simulator.statistics['PercentageALSlt10min'].recordAverage(simulator.now(), 1 if response_time <= 10*60 else 0)
+                        simulator.statistics['PercentageALSlt8min'].recordAverage(simulator.now(), 1 if response_time <= 8*60 else 0)
+                        simulator.statistics['PercentageALSlt7min'].recordAverage(simulator.now(), 1 if response_time <= 7*60 else 0)
+
+                        simulator.statistics['SpatialHS10minCover'].record(simulator.now(), self.vehicle.patient.node, 1 if response_time <= 10*60 else 0)
+                        simulator.statistics['SpatialHS8minCover'].record(simulator.now(), self.vehicle.patient.node, 1 if response_time <= 8*60 else 0)
+                        simulator.statistics['SpatialHS7minCover'].record(simulator.now(), self.vehicle.patient.node, 1 if response_time <= 7*60 else 0)
+
+                        simulator.statistics['SpatialHSAverageResponseTime'].record(simulator.now(), self.vehicle.patient.node, response_time)
+
+                    else:
+                        response_time = simulator.now() - self.vehicle.patient.arrival_time
+                        simulator.statistics['SpatialLSAverageResponseTime'].record(simulator.now(), self.vehicle.patient.node, response_time)
+                    
+                    if self.vehicle.isUber:
+                        simulator.statistics['UberResponseTime'].record(simulator.now(), simulator.now() - self.vehicle.patient.vehicle_assigned_time)
+
+                    simulator.statistics['TravelTime'].record(simulator.now(), simulator.now() - self.vehicle.patient.vehicle_assigned_time)
+
+                    return AmbulanceStartAttendingEvent(self.vehicle, simulator.now(), self.vehicle,
+                        self.vehicle.patient)
+            elif status == 2:
+                # Mark ambulance as cleaning and schedule finish cleaning event
+                self.vehicle.cleaning = True
+                simulator.insert(AmbulanceEndCleaningEvent(simulator, simulator.now() + 10*60, self.vehicle))
+
+                if self.vehicle.patient is not None:
+                    # Statistics
+                    if self.vehicle.patient.to_hospital_time > 0:
+                        simulator.statistics['ToHospitalTime'].record(simulator.now(), simulator.now() - self.vehicle.patient.to_hospital_time)
+
+                    return EmergencyLeaveSystemEvent(self.entity, simulator.now(),
+                            self.vehicle.patient, True, vehicle=self.vehicle, chain_assignment=True)
+
+            simulator.registerVehicleStationChange(self.vehicle, self.vehicle.pos)
 
 
 class AmbulanceArriveToNodeEvent(Sim.Event):
@@ -220,6 +397,10 @@ class TripAssignedEvent(Sim.Event):
 
     def execute(self, simulator: "Models.EMSModel"):
         if self.node != self.vehicle.pos:
+            # Save a record of the trip
+            self.vehicle.record.append((simulator.now(), self.vehicle.pos, self.node, self.vehicle.patient,
+                                        self.vehicle.patient.hospital if self.vehicle.patient is not None else None))
+
             if not self.vehicle.moving:
                 # Compute shortest path for vehicle
                 path: List[List[int]] = simulator.getShortestPath(self.vehicle.pos, self.node)
@@ -232,6 +413,16 @@ class TripAssignedEvent(Sim.Event):
                 simulator.insert(AmbulanceStartMovingEvent(self.vehicle, simulator.now(), self.vehicle,
                                 simulator.city_graph.es[self.vehicle.actual_edge]))
             else:
+                # Remove relocation workload that hasn't been complete
+                #speeds = simulator.parameters.getSpeedList(simulator.timePeriod())
+                #extra_movement = 0
+                #for edge in self.vehicle.path:
+                #    extra_movement += speeds[edge]
+                #self.vehicle.reposition_workload -= extra_movement
+
+                #if self.vehicle.reposition_workload < 0:
+                #    self.vehicle.reposition_workload = 0
+
                 # Compute shortest path for vehicle
                 path = simulator.getShortestPath(self.vehicle.to_node, self.node)
                 
@@ -247,6 +438,9 @@ class TripAssignedEvent(Sim.Event):
             
             # Recover the position logic
             simulator.registerVehicleStationChange(self.vehicle, self.node)
+        
+        else:
+            return AmbulanceEndTripEvent(self.vehicle, simulator.now(), self.vehicle, valid=False)
 
 
 class AssignedEvent(Sim.Event):
@@ -275,12 +469,21 @@ class AssignedEvent(Sim.Event):
         # Schedule the start of the movement for the vehicle
         self.vehicle.onArrivalToNode(self.vehicle.pos)
 
+        self.emergency.vehicle_assigned_time = simulator.now()
+
         if len(path[0]) != 0:
             simulator.insert(AmbulanceStartMovingEvent(self.vehicle, simulator.now(), self.vehicle,
                             simulator.city_graph.es[self.vehicle.actual_edge]))
         else:
             simulator.insert(AmbulanceArriveToNodeEvent(self.vehicle, simulator.now(), 
                                                         self.vehicle, self.emergency.node))
+
+        # Statistics
+        simulator.statistics['AverageAssignmentTime'].recordAverage(simulator.now(), simulator.now() - self.emergency.arrival_time)
+        self.vehicle.statistics['State'].record(simulator.now(), 2)
+
+        if self.vehicle.isUber:
+            simulator.statistics['UberCalls'].record(simulator.now(), 1)
 
 
 class AmbulanceStartMovingEvent(Sim.Event):
@@ -302,6 +505,11 @@ class AmbulanceStartMovingEvent(Sim.Event):
     def execute(self, simulator: "Models.EMSModel"):
         self.travel_time = self.edge['length']/simulator.parameters.getSpeedList(simulator.timePeriod())[self.edge.index]
         self.vehicle.onMovingToNextNode(simulator.now() + self.travel_time)
+
+        if self.vehicle.patient is None:
+            self.vehicle.reposition_workload += self.travel_time
+            self.vehicle.statistics['RelocationTime'].record(simulator.now(), self.vehicle.reposition_workload)
+            self.vehicle.statistics['State'].record(simulator.now(), 1)
 
         # Schedule vehicle arrival to node
         simulator.insert(AmbulanceArriveToNodeEvent(self.vehicle, simulator.now() + self.travel_time,
@@ -340,13 +548,15 @@ class EmergencyArrivalEvent(Sim.Event):
                  time: float,
                  node: str,
                  severity: int,
+                 disposition_code: int,
                  name:str = None):
         super().__init__(time, name)
 
         self.entity: object = entity
         self.node: str = node
         self.severity: int = severity
-        self.emergency = Models.Emergency(self.time, self.node, self.severity)
+        self.disposition_code: int = disposition_code
+        self.emergency = Models.Emergency(self.time, self.node, self.severity, self.disposition_code)
 
         self.message: str = "Emergency arrived at node {}".format(node)
     
@@ -389,6 +599,26 @@ class AmbulanceArrivalEvent(Sim.Event):
         simulator.registerVehicleStationChange(self.vehicle, self.node)
 
 
+class HospitalSettingEvent(Sim.Event):
+    """
+    Intended to use in the ambulance 'lifecicle'
+    """
+
+    def __init__(self,
+                 entity: object,
+                 time: float,
+                 name:str = None):
+
+        super().__init__(time, name)
+
+        self.entity: object = entity
+
+        self.message: str = "Setting hospitals in place..."
+
+    def execute(self, simulator: "Models.EMSModel"):
+        self.hospital_nodes: List[str] = list(set([h for _, hospitals in simulator.hospitals.items() for h in hospitals]))
+
+
 class EndSimulationEvent(Sim.Event):
 
     def __init__(self,
@@ -401,4 +631,5 @@ class EndSimulationEvent(Sim.Event):
         self.message: str = "End of simulation"
     
     def execute(self, simulator: "Models.EMSModel"):
+        simulator.statistics['RunTime'].record(time.time() - simulator.sim_start_time)
         simulator.events.empty()

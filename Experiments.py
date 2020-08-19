@@ -28,41 +28,7 @@ with open(DATA_DIR + 'NYC Graph//NYC_graph_revised.pickle', 'rb') as file:
 
 # Importing parameters
 nodes_with_borough = gpd.read_file(DATA_DIR + 'NYC Graph//NYC_nodes_w_borough//NYC_nodes_w_borough.shp')
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//candidate_nodes.pickle', 'rb') as file:
-    candidate_nodes = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//demand_nodes.pickle', 'rb') as file:
-    demand_nodes = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//hospital_nodes.pickle', 'rb') as file:
-    hospital_nodes = pickle.load(file)
-    hospital_nodes = {1: hospital_nodes}
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//hourly_demand_rates_HS.pickle', 'rb') as file:
-    demand_rates = [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//hourly_demand_rates_LS.pickle', 'rb') as file:
-    demand_rates += [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//mean_activity_time_HS.pickle', 'rb') as file:
-    busy_time = [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//mean_activity_time_LS.pickle', 'rb') as file:
-    busy_time += [pickle.load(file)]
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//candidate_candidate_time.pickle', 'rb') as file:
-    cand_cand_time = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//candidate_demand_time.pickle', 'rb') as file:
-    cand_demand_time = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//neighborhood_candidates.pickle', 'rb') as file:
-    neighborhood_candidates = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//neighborhood.pickle', 'rb') as file:
-    neighborhood = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//neighborhood_k.pickle', 'rb') as file:
-    neighborhood_k = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//candidate_borough.pickle', 'rb') as file:
-    candidate_borough = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//demand_borough.pickle', 'rb') as file:
-    demand_borough = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//reachable_demand.pickle', 'rb') as file:
-    reachable_demand = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//reachable_inverse.pickle', 'rb') as file:
-    reachable_inverse = pickle.load(file)
-with open(DATA_DIR + 'Preprocessing Values//MixedLR//uber_nodes.pickle', 'rb') as file:
-    uber_nodes = pickle.load(file)
+
 
  # Load the speeds df
 speeds = pd.read_csv(DATA_DIR + 'NYC Graph//edge_speeds_vicky.csv')
@@ -72,47 +38,78 @@ speeds = speeds.drop('Unnamed: 0', axis=1)
 speeds.index = speeds['edgeid']
 speeds = speeds.loc[graph.es['edgeid'], :]
 
+# Testing sets
+days = ['friday']
+dataReplica = [0]
+simTime = [24*3600]
+relocatorModel = ['coverage', 'survivalNoExp']
+dispatchers = ['preparedness', 'nearest']
+relocate = [True, False]
+ambulanceDistribution = [[[0, 35, 37, 45, 33, 7],
+                          [0, 57, 63, 70, 53, 10]],
+
+                         [[0, 70, 74, 89, 65, 14],
+                          [0, 114, 126, 140, 105, 20]]]
+
+workloadRestriction = [True, False]
+workloadLimit = [.4, .3, .2]
+useUber = [False, True]
+GAP = [.05, .1]
 
 EXPERIMENTS: List[Dict[str, Any]] \
-            = [{'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'preparedness',
-                'relocate': True, 'workload_restriction': True, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'nearest',
-                'relocate': True, 'workload_restriction': True, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'preparedness',
-                'relocate': True, 'workload_restriction': False, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'nearest',
-                'relocate': True, 'workload_restriction': False, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'preparedness',
-                'relocate': False, 'workload_restriction': True, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'nearest',
-                'relocate': False, 'workload_restriction': True, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'preparedness',
-                'relocate': False, 'workload_restriction': False, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'nearest',
-                'relocate': False, 'workload_restriction': False, 'workload_limit': .4, 'useUber': False},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survival', 'dispatcher': 'preparedness',
-                'relocate': True, 'workload_restriction': True, 'workload_limit': .4, 'useUber': True},
-
-                {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'coverage', 'dispatcher': 'preparedness',
-                'relocate': True, 'workload_restriction': True, 'workload_limit': .4, 'useUber': False}]
+            = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
+                'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,
+                'parameters_dir': 'HRDemand'}
+                for gap in GAP for amb in ambulanceDistribution for wlRes in workloadRestriction for wlL in workloadLimit for uber in useUber
+                for day in days for rep in dataReplica for time in simTime for model in relocatorModel for disp in dispatchers
+                for rel in relocate]
 
 for experiment in EXPERIMENTS:
 
-    name = '{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'], experiment['dataReplica'], experiment['relocatorModel'], experiment['dispatcher'],
+    name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'], experiment['dataReplica'], experiment['relocatorModel'], experiment['dispatcher'],
                                             'Relocate' if experiment['relocate'] else 'NoRelocation', 'Workload' if experiment['workload_restriction'] else 'NoWorkloadRestriction',
-                                            experiment['workload_limit'], 'Uber' if experiment['useUber'] else 'NoUber')
+                                            experiment['workload_limit'], 'Uber' if experiment['useUber'] else 'NoUber', experiment['GAP'], experiment['parameters_dir'],
+                                            'LowAmbulances' if experiment['ambulance_distribution'] == [[0, 35, 37, 45, 33, 7],[0, 57, 63, 70, 53, 10]] else 'ALotAmbulances')
 
     if os.path.exists('StatisticsResults/{}.pickle'.format(name)):
         print('Skipping ' + name)
         continue
+
+    with open(DATA_DIR + 'Preprocessing Values//{}//candidate_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        candidate_nodes = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//demand_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        demand_nodes = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//hospital_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        hospital_nodes = pickle.load(file)
+        hospital_nodes = {1: hospital_nodes}
+    with open(DATA_DIR + 'Preprocessing Values//{}//hourly_demand_rates_HS.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        demand_rates = [pickle.load(file)]
+    with open(DATA_DIR + 'Preprocessing Values//{}//hourly_demand_rates_LS.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        demand_rates += [pickle.load(file)]
+    with open(DATA_DIR + 'Preprocessing Values//{}//mean_activity_time_HS.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        busy_time = [pickle.load(file)]
+    with open(DATA_DIR + 'Preprocessing Values//{}//mean_activity_time_LS.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        busy_time += [pickle.load(file)]
+    with open(DATA_DIR + 'Preprocessing Values//{}//candidate_candidate_time.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        cand_cand_time = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//candidate_demand_time.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        cand_demand_time = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//neighborhood_candidates.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        neighborhood_candidates = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//neighborhood.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        neighborhood = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//neighborhood_k.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        neighborhood_k = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//candidate_borough.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        candidate_borough = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//demand_borough.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        demand_borough = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//reachable_demand.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        reachable_demand = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//reachable_inverse.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        reachable_inverse = pickle.load(file)
+    with open(DATA_DIR + 'Preprocessing Values//{}//uber_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        uber_nodes = pickle.load(file)
 
     print('Starting ' + name)
     # Importing low severity emergencies file
@@ -136,7 +133,9 @@ for experiment in EXPERIMENTS:
                     nodes_with_borough=nodes_with_borough,
                     demand_nodes=demand_nodes,
                     demand_rates=demand_rates,
-                    n_vehicles = [[312, 505]] * 3,
+                    ALS_tours=900,
+                    BLS_tours= 1500,
+                    #n_vehicles = [[np.sum(experiment['ambulance_distribution'][0]), np.sum(experiment['ambulance_distribution'][1])]] * 3,
                     mean_busytime=busy_time,
                     cand_cand_time=cand_cand_time,
                     cand_demand_time=cand_demand_time,
@@ -152,8 +151,11 @@ for experiment in EXPERIMENTS:
                     apply_workload_restriction = experiment['workload_restriction'],
                     maximum_overload_ALS = experiment['workload_limit'],
                     maximum_overload_BLS = experiment['workload_limit'],
-                    is_uber_available = experiment['useUber']
+                    is_uber_available = experiment['useUber'],
+                    optimization_gap=experiment['GAP']
     )
+    #ambulance_distribution=[[0, 70, 74, 89, 65, 14],
+    #                        [0, 114, 126, 140, 105, 20]]
 
     dispatcher: Solvers.DispatcherModel = Solvers.DispatcherModel()
     relocator: Solvers.RelocationModel = Solvers.RelocationModel()
@@ -167,6 +169,8 @@ for experiment in EXPERIMENTS:
         relocator = Solvers.MaxExpectedSurvivalRelocator()
     elif experiment['relocatorModel'] == 'coverage':
         relocator = Solvers.MaxSingleCoverRelocator()
+    elif experiment['relocatorModel'] == 'survivalNoExp':
+        relocator = Solvers.MaxSurvivalRelocator()
 
     simulator: Models.EMSModel = Models.EMSModel(graph, generator, dispatcher, relocator, sim_parameters, verbose=False)
     statistics = simulator.run()

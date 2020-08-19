@@ -139,7 +139,8 @@ def computeDemandValues(_preprocesing_df_dir,
 def computePreprocessingData(candidates_df, demand_df, hospital_df,
                               base_nodes_w_borough, city_graph, 
                               speeds_df, save_dir,
-                              reachable_limits = 8*60):
+                              reachable_limits = 8*60,
+                              compute_uber = False):
     """
     As you see, a huge function, but don't be afraid, it's just a
     bunch of little processes that compute some statistics and lists.
@@ -184,15 +185,16 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
     with open(save_dir + "demand_borough.pickle", 'wb') as f:
         pickle.dump(demand_borough, f)
     
-    print('Computing uber nodes ...')
-    uber_nodes = {}
-    for node in city_graph.vs:
-        distances = city_graph.shortest_paths(node['name'], city_graph.vs['name'], weights= city_graph.es['length']/speeds_df['p1n'])[0]
-        distances = np.array(distances)
-        uber_nodes[node['name']] = city_graph.vs[random.choice(np.where((distances > 4.5*60) & (distances < 10 * 60))[0])]['name']
+    if compute_uber:
+        print('Computing uber nodes ...')
+        uber_nodes = {}
+        for node in city_graph.vs:
+            distances = city_graph.shortest_paths(node['name'], city_graph.vs['name'], weights= city_graph.es['length']/speeds_df['p1n'])[0]
+            distances = np.array(distances)
+            uber_nodes[node['name']] = city_graph.vs[random.choice(np.where((distances > 4.5*60) & (distances < 10 * 60))[0])]['name']
 
-    with open(save_dir + "uber_nodes.pickle", 'wb') as f:
-        pickle.dump(uber_nodes, f)
+        with open(save_dir + "uber_nodes.pickle", 'wb') as f:
+            pickle.dump(uber_nodes, f)
 
     print('Computing demand values...')
     computeDemandValues(DATA_DIR + '/data/dispatch_data_for_preprocessing.pickle',
@@ -302,7 +304,7 @@ if __name__ == "__main__":
     graph_nodes = gpd.read_file(DATA_DIR + 'NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
 
     # Load the uniform demand points
-    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform1km/Uniform1kmDemand.shp')
+    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform600m/Uniform600mDemand.geojson')
 
     # Load the hospital points
     hospital_df = gpd.read_file(DATA_DIR + 'Generated Shapefiles/NYC_Hospitals/NYC_Hospitals.geojson')
@@ -319,4 +321,4 @@ if __name__ == "__main__":
     speeds.index = speeds['edgeid']
     speeds = speeds.loc[city_graph.es['edgeid'], :]
 
-    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, DATA_DIR + 'Preprocessing Values//MixedLR//')
+    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, DATA_DIR + 'Preprocessing Values//HRDemand//')

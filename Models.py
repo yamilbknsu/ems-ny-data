@@ -1,5 +1,6 @@
 # Import Statements
 import time
+import random
 import igraph
 import numpy as np
 import pandas as pd
@@ -51,7 +52,8 @@ class SimulationParameters:
                  candidate_nodes: List[str],
                  demand_nodes: List[str],
                  speeds_df: "pd.DataFrame",
-                 n_vehicles: List[List[int]],
+                 ALS_tours: float,
+                 BLS_tours: float,
                  neighborhood: List[Dict[str, List[str]]],
                  neighborhood_candidates: List[Dict[str, List[str]]],
                  neighbor_k: List[Dict[str, int]],
@@ -66,6 +68,7 @@ class SimulationParameters:
                  simulation_time: float = 3600,
                  relocation_optimization: bool = True,
                  relocation_period: float = 600,
+                 optimization_gap: float = .1,
                  apply_workload_restriction: bool = True,
                  time_periods: List[float] = [7, 3, 6, 3, 5],
                  time_shifts: List[float] = [8,8,8],
@@ -117,8 +120,15 @@ class SimulationParameters:
             candidate_nodes (List[str]): [C] List of candidate nodes (by osmid)
             demand_nodes (List[str]): [D] List of demand nodes (by osmid)
             speeds_df (pd.DataFrame): Dataframe with columns: edgeid and p+'x'+n for x in range(1,T) 
+
+            TODO: FIX THIS
             n_vehicles (List[List[int]]): [T, V] Number of ambulances of each type available for
                                                  each time period
+            ambulance_distribution (List[List[int]]): The amount of ambulances of each type at each borough. 
+                                                      The sum should be equal to the values at n_vehicles.
+
+
+
             neighborhood (List[Dict[str, List[str]]]): [C: ?] List of demand nodes inside the neighborhood
                                                               of each candidate node
             neighborhood_candidates (List[Dict[str, List[str]]]): [C: ?] List of candidate nodes sharing the neighborhood
@@ -142,6 +152,7 @@ class SimulationParameters:
             simulation_time (float, optional): Time limit for the simulation .Defaults to 3600.
             relocation_optimization (bool, optional): Whether or not to perform online relocation. Defaults to True.
             relocation_period (float, optional): Time in seconds between each relocation process. Defaults to 600.
+            optimization_gap (flaot, optional): MIPGap parameter for gurobi solver. Defaults to .1
             apply_workload_restriction (bool, optional): Whether or not to apply workload restrictions in the
                                                          optimization process. Defaults to True.
             time_periods (List[float], optional): [T] Duration in hours of each time period. Defaults to [7, 3, 6, 3, 5].
@@ -160,11 +171,13 @@ class SimulationParameters:
         self.simulation_time = simulation_time
         self.relocation_optimization = relocation_optimization
         self.relocation_period = relocation_period
+        self.optimization_gap = optimization_gap
         self.apply_workload_restriction = apply_workload_restriction
         self.time_periods = time_periods
         self.time_shifts = time_shifts
         self.vehicle_types = vehicle_types
-        self.n_vehicles = n_vehicles
+        self.ALS_tours = ALS_tours
+        self.BLS_tours = BLS_tours
         self.initial_nodes = initial_nodes
         self.hospital_nodes = hospital_nodes
         self.random_seed = random_seed
@@ -196,6 +209,7 @@ class SimulationParameters:
 
         # Set the RNG seed
         np.random.seed(self.random_seed)
+        random.seed(self.random_seed)
 
         # Initialization of some parameters
         # ---------------------------------
@@ -210,22 +224,41 @@ class SimulationParameters:
         self.computeQandP(0)
 
         # Compute ambulance distribution
-        #borough_demand = np.array([np.sum(self.demand_rates[0][d][1] for d in demand_borough[b]) for b in range(1,6)])
-        #borough_demand = borough_demand/np.sum(borough_demand)
+        ALS_temporal_demand_factor = np.array([np.sum(self.demand_rates[0].loc[t, :]) for t in range(1, 1 + len(time_periods))])
+        ALS_temporal_demand_factor /= np.sum(ALS_temporal_demand_factor)
+        BLS_temporal_demand_factor = np.array([np.sum(self.demand_rates[1].loc[t, :]) for t in range(1, 1 + len(time_periods))])
+        BLS_temporal_demand_factor /= np.sum(BLS_temporal_demand_factor)
 
-        # Allocate the ambulances to each borough
-        self.ambulance_distribution = [[0, 70, 74, 89, 65, 14],
-                                       [0, 114, 126, 140, 105, 20]]
+        cumulative_time_periods = [sum(self.time_periods[:l+1]) for l in range(len(self.time_periods))]
+        cumulative_time_shifts = [sum(self.time_shifts[:l+1]) for l in range(len(self.time_shifts))]
 
-        #for v in range(2):
-        #    n_total = n_vehicles[0][v]
-        #    n_allocated = 0
-        #    allocated_ambulances = [0]
-        #    for b in range(5-1):
-        #        n_allocated += int(n_total * borough_demand[b])
-        #        allocated_ambulances.append(int(n_total * borough_demand[b]))
-        #    allocated_ambulances.append(int(n_total - n_allocated))
-        #    self.ambulance_distribution.append(allocated_ambulances)
+        used_hours = np.zeros(len(self.time_periods))
+        ALS_final_temporal_factor = []
+        BLS_final_temporal_factor = []
+        for ts in cumulative_time_shifts:
+            i = 0
+            for tp in cumulative_time_periods:
+                if tp >= ts:
+                    break
+                i += 1
+            factor = np.array([np.clip((ts - sum(self.time_periods[:j]))/self.time_periods[j], a_min=0, a_max=1) if j <= i else 0 for j in range(len(self.time_periods))]) - used_hours
+
+            ALS_final_temporal_factor.append(sum(ALS_temporal_demand_factor * factor))
+            BLS_final_temporal_factor.append(sum(BLS_temporal_demand_factor * factor))
+
+            used_hours += factor
+
+        ALS_temporal_distribution = np.trunc(ALS_tours * np.array(ALS_final_temporal_factor))
+        BLS_temporal_distribution = np.trunc(BLS_tours * np.array(BLS_final_temporal_factor))
+
+        borough_demand = np.array([np.sum(self.demand_rates[0][d][1] for d in demand_borough[b]) for b in range(1,6)])
+        borough_demand = borough_demand/np.sum(borough_demand)
+
+        # Allocate the ambulances to each borough each time shift
+        self.ambulance_distribution = [[np.round(ALS_temporal_distribution[t]*borough_demand), np.round(BLS_temporal_distribution[t]*borough_demand)] for t in range(len(time_shifts))]
+        
+        #self.ambulance_distribution = [[0, 70, 74, 89, 65, 14],
+        #                               [0, 114, 126, 140, 105, 20]]
 
     def getSpeedList(self, time_period: int):
         """
@@ -318,6 +351,7 @@ class Vehicle(Sim.SimulationEntity):
         self.expected_arrival: float = 0    # Expected arrival time to next node    
         self.teleportToNode(start_node)
         self.cleaning: bool = False
+        self.leaving: bool = False
 
         # The time spent repositioning
         self.reposition_workload: float = 0
@@ -460,7 +494,7 @@ class EMSModel(Sim.Simulator):
             parameters.initial_nodes = []
             for m in range(parameters.vehicle_types):
                 pos_list = []
-                for v in range(parameters.n_vehicles[0][m]):
+                for v in range(int(sum(parameters.ambulance_distribution[0][m]))):
                     while True:
                         node = self.city_graph.vs[np.random.randint(n)]['name']
                         if node not in parameters.initial_nodes:
@@ -472,22 +506,22 @@ class EMSModel(Sim.Simulator):
         self.ubers: List[Vehicle] = list()
         self.vehicles: List[Vehicle] = list()
         for v in range(parameters.vehicle_types):
-            assert len(parameters.initial_nodes[v]) == parameters.n_vehicles[0][v]
+            assert len(parameters.initial_nodes[v]) == int(sum(parameters.ambulance_distribution[0][v]))
 
-        n = 0
+        self.n_vehicles = 0
         for v in range(parameters.vehicle_types):
-            cumulative_distribution = np.cumsum(parameters.ambulance_distribution[v])
+            cumulative_distribution = np.cumsum(parameters.ambulance_distribution[0][v])
             b = 1
             i = 0
 
-            for m in range(parameters.n_vehicles[0][v]):
+            for m in range(int(sum(parameters.ambulance_distribution[0][v]))):
                 # Compute the corresponding borough
-                if i == cumulative_distribution[b]:
+                if i == int(cumulative_distribution[b-1]):
                     b += 1
 
                 self.insert(Events.AmbulanceArrivalEvent(self, 0, parameters.initial_nodes[v][m],           
-                            Vehicle(parameters.initial_nodes[v][m], v, b, uber=False, name='Ambulance ' + str(n))))             
-                n += 1
+                            Vehicle(parameters.initial_nodes[v][m], v, b, uber=False, name='Ambulance ' + str(self.n_vehicles))))             
+                self.n_vehicles += 1
                 i += 1
         
         # Schedule the ambulance setting event
@@ -498,7 +532,9 @@ class EMSModel(Sim.Simulator):
 
         # Lists representing the state of the model
         self.activeEmergencies: List[Emergency] = list()        # All the emergencies in the system         
-        self.assignedEmergencies: List[Emergency] = list()      # Those which have been assigned            
+        self.assignedEmergencies: List[Emergency] = list()      # Those which have been assigned
+
+        self.assignedNotArrived: int = 0          
 
         # Schedule the first arrival
         self.insert(next(self.arrival_generator))
@@ -511,12 +547,16 @@ class EMSModel(Sim.Simulator):
 
         # Initialize model Statistics
         self.statistics: Dict[str, Sim.Statistic] = {}
+        self.vehicle_statistics: Dict[str, Dict] = {}
 
         for b in range(1, 6):
             self.statistics['OptimizationSizeALS' + str(b)] = Sim.TimedTallyStatistic('OptimizationSizeALS' + str(b))   # @ solver execution
             self.statistics['OptimizationTimeALS' + str(b)] = Sim.TimedTallyStatistic('OptimizationTimeALS' + str(b))   # @ solver execution
             self.statistics['OptimizationSizeBLS' + str(b)] = Sim.TimedTallyStatistic('OptimizationSizeBLS' + str(b))   # @ solver execution
             self.statistics['OptimizationTimeBLS' + str(b)] = Sim.TimedTallyStatistic('OptimizationTimeBLS' + str(b))   # @ solver execution
+
+        self.statistics['AvailableALSVehicles'] = Sim.StateStatistic('AvailableALSVehicles', len(self.getAvaliableVehicles(v_type=0)))
+        self.statistics['AvailableBLSVehicles'] = Sim.StateStatistic('AvailableBLSVehicles', len(self.getAvaliableVehicles(v_type=1)))
 
         self.statistics['EmergenciesServed'] = Sim.CounterStatistic('TotalEmergenciesServed')           # @ Emergency leaving event
         self.statistics['EmergenciesTimeInSystem'] = Sim.TallyStatistic('EmergenciesTimeInSystem')      # @ Emergency leaving event
@@ -557,6 +597,14 @@ class EMSModel(Sim.Simulator):
 
         self.sim_start_time = time.time()
         self.statistics['RunTime'] = Sim.CounterStatistic('RunTime')                                    # @ End Simulation event
+
+        self.statistics['GAPALSPart1'] = Sim.TimedTallyStatistic('GAPALSPart1')                         # @ Solver relocate
+        self.statistics['GAPALSPart2'] = Sim.TimedTallyStatistic('GAPALSPart2')                         # @ Solver relocate
+        self.statistics['GAPBLSPart1'] = Sim.TimedTallyStatistic('GAPBLSPart1')                         # @ Solver relocate
+        self.statistics['GAPBLSPart2'] = Sim.TimedTallyStatistic('GAPBLSPart2')                         # @ Solver relocate
+
+        self.statistics['EmergenciesWaiting'] = Sim.StateStatistic('EmergenciesWaiting')
+
 
         # Tuples of the form
         # (emergency name, node, severity, arrival time, attending time, to_hospital_time, disposition code, hospital)
@@ -706,7 +754,10 @@ class EMSModel(Sim.Simulator):
         return self.now() - cummulative_periods[time_period]
 
     def getStatistics(self):
-        return [self.statistics, {v.name: {'Statistics': v.statistics, 'Record': v.record} for v in self.vehicles}, self.emergencyRecord]
+        for v in self.vehicles:
+            self.vehicle_statistics[v.name] = {'Statistics': v.statistics, 'Record': v.record}
+
+        return [self.statistics, self.vehicle_statistics, self.emergencyRecord]
     
     def __str__(self):
         return 'Simulator'

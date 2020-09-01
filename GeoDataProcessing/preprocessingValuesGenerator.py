@@ -164,10 +164,14 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
 
     # Compute the graph points for the hospitals
     print('Computing Hospital nodes...')
-    hospital_nodes = list(set(nearest_neighbor(hospital_df, base_nodes_w_borough, 1)['osmid']))
+    NN = nearest_neighbor(hospital_df, base_nodes_w_borough, 1)
+    hospital_nodes = list(set(NN['osmid']))
+    hospital_borough = {hospital: int(NN[NN['osmid'] == hospital]['boro_code']) for hospital in hospital_nodes}
 
     with open(save_dir + "hospital_nodes.pickle", 'wb') as f:
         pickle.dump(hospital_nodes, f)
+    with open(save_dir + "hospital_borough.pickle", 'wb') as f:
+        pickle.dump(hospital_borough, f)
     
     # Compute the graph points for the demands
     print('Computing demand nodes...')

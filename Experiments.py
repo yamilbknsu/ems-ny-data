@@ -40,28 +40,24 @@ speeds = speeds.loc[graph.es['edgeid'], :]
 
 # Testing sets
 days = ['friday']
-dataReplica = [0]
+dataReplica = [0,1,2]
 simTime = [24*3600]
-relocatorModel = ['coverage', 'survivalNoExp']
+relocatorModel = ['survivalNoExp', 'coverage']
 dispatchers = ['preparedness', 'nearest']
-relocate = [True, False]
-ambulanceDistribution = [[[0, 35, 37, 45, 33, 7],
-                          [0, 57, 63, 70, 53, 10]],
-
-                         [[0, 70, 74, 89, 65, 14],
-                          [0, 114, 126, 140, 105, 20]]]
-
-workloadRestriction = [True, False]
-workloadLimit = [.4, .3, .2]
+relocate = [True, False] # Online or static
+                        # ALS  BLS
+ambulanceDistribution = [[355, 802]]
+workloadRestriction = [True]
+workloadLimit = [.2]
 useUber = [False, True]
-GAP = [.05, .1]
+GAP = [.05]
 
 EXPERIMENTS: List[Dict[str, Any]] \
             = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
                 'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,
                 'parameters_dir': 'HRDemand'}
-                for gap in GAP for amb in ambulanceDistribution for wlRes in workloadRestriction for wlL in workloadLimit for uber in useUber
-                for day in days for rep in dataReplica for time in simTime for model in relocatorModel for disp in dispatchers
+                for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction for day in days
+                for uber in useUber for rep in dataReplica for time in simTime for model in relocatorModel for disp in dispatchers
                 for rel in relocate]
 
 for experiment in EXPERIMENTS:
@@ -69,7 +65,7 @@ for experiment in EXPERIMENTS:
     name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'], experiment['dataReplica'], experiment['relocatorModel'], experiment['dispatcher'],
                                             'Relocate' if experiment['relocate'] else 'NoRelocation', 'Workload' if experiment['workload_restriction'] else 'NoWorkloadRestriction',
                                             experiment['workload_limit'], 'Uber' if experiment['useUber'] else 'NoUber', experiment['GAP'], experiment['parameters_dir'],
-                                            'LowAmbulances' if experiment['ambulance_distribution'] == [[0, 35, 37, 45, 33, 7],[0, 57, 63, 70, 53, 10]] else 'ALotAmbulances')
+                                            str(experiment['ambulance_distribution'][0]) + 'ALS' + str(experiment['ambulance_distribution'][1]) + 'BLS')
 
     if os.path.exists('StatisticsResults/{}.pickle'.format(name)):
         print('Skipping ' + name)
@@ -82,6 +78,8 @@ for experiment in EXPERIMENTS:
     with open(DATA_DIR + 'Preprocessing Values//{}//hospital_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
         hospital_nodes = pickle.load(file)
         hospital_nodes = {1: hospital_nodes}
+    with open(DATA_DIR + 'Preprocessing Values//{}//hospital_borough.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+        hospital_borough = pickle.load(file)
     with open(DATA_DIR + 'Preprocessing Values//{}//hourly_demand_rates_HS.pickle'.format(experiment['parameters_dir']), 'rb') as file:
         demand_rates = [pickle.load(file)]
     with open(DATA_DIR + 'Preprocessing Values//{}//hourly_demand_rates_LS.pickle'.format(experiment['parameters_dir']), 'rb') as file:
@@ -130,12 +128,12 @@ for experiment in EXPERIMENTS:
                     speeds_df = speeds,
                     candidate_nodes=candidate_nodes,
                     hospital_nodes=hospital_nodes,
+                    hospital_borough=hospital_borough,
                     nodes_with_borough=nodes_with_borough,
                     demand_nodes=demand_nodes,
                     demand_rates=demand_rates,
-                    ALS_tours=900,
-                    BLS_tours= 1500,
-                    #n_vehicles = [[np.sum(experiment['ambulance_distribution'][0]), np.sum(experiment['ambulance_distribution'][1])]] * 3,
+                    ALS_tours=experiment['ambulance_distribution'][0],
+                    BLS_tours= experiment['ambulance_distribution'][1],
                     mean_busytime=busy_time,
                     cand_cand_time=cand_cand_time,
                     cand_demand_time=cand_demand_time,
@@ -171,6 +169,8 @@ for experiment in EXPERIMENTS:
         relocator = Solvers.MaxSingleCoverRelocator()
     elif experiment['relocatorModel'] == 'survivalNoExp':
         relocator = Solvers.MaxSurvivalRelocator()
+    elif experiment['relocatorModel'] == 'survivalExpCoverage':
+        relocator = Solvers.MaxExpectedSurvivalCoverageRelocator()
 
     simulator: Models.EMSModel = Models.EMSModel(graph, generator, dispatcher, relocator, sim_parameters, verbose=False)
     statistics = simulator.run()

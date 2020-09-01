@@ -49,6 +49,7 @@ class SimulationParameters:
                  cand_cand_time: List["np.array"],
                  cand_demand_time: List["np.array"],
                  hospital_nodes: Dict[int, List[str]],
+                 hospital_borough,
                  candidate_nodes: List[str],
                  demand_nodes: List[str],
                  speeds_df: "pd.DataFrame",
@@ -63,6 +64,8 @@ class SimulationParameters:
                  reachable_demand: List[Dict[str, List[str]]],
                  reachable_inverse: List[Dict[str, List[str]]],
                  uber_nodes: Dict[str, str],
+                 vehicle_shift: Callable = lambda _: 8*3600,
+                 vehicle_arrival_deviation: float = 3600,
                  is_uber_available: bool = False,
                  uber_low_severity_ratio: float = .1,
                  simulation_time: float = 3600,
@@ -152,7 +155,7 @@ class SimulationParameters:
             simulation_time (float, optional): Time limit for the simulation .Defaults to 3600.
             relocation_optimization (bool, optional): Whether or not to perform online relocation. Defaults to True.
             relocation_period (float, optional): Time in seconds between each relocation process. Defaults to 600.
-            optimization_gap (flaot, optional): MIPGap parameter for gurobi solver. Defaults to .1
+            optimization_gap (float, optional): MIPGap parameter for gurobi solver. Defaults to .1
             apply_workload_restriction (bool, optional): Whether or not to apply workload restrictions in the
                                                          optimization process. Defaults to True.
             time_periods (List[float], optional): [T] Duration in hours of each time period. Defaults to [7, 3, 6, 3, 5].
@@ -178,8 +181,11 @@ class SimulationParameters:
         self.vehicle_types = vehicle_types
         self.ALS_tours = ALS_tours
         self.BLS_tours = BLS_tours
+        self.vehicle_shift = vehicle_shift
+        self.vehicle_arrival_deviation = vehicle_arrival_deviation
         self.initial_nodes = initial_nodes
         self.hospital_nodes = hospital_nodes
+        self.hospital_borough = hospital_borough
         self.random_seed = random_seed
 
         # Routing parameters
@@ -356,13 +362,16 @@ class Vehicle(Sim.SimulationEntity):
         # The time spent repositioning
         self.reposition_workload: float = 0
         self.station = start_node
+        self.arrival_time = 0
 
         # Statistics
         self.statistics: Dict[str, Sim.Statistic] = {}
 
         self.statistics['RelocationTime'] = Sim.StateStatistic('RelcationTime{}'.format(self.name))             # At start moving event and change shift
+        self.statistics['MetersDriven'] = Sim.StateStatistic('MetersDriven{}'.format(self.name))
         self.statistics['EmergenciesServed'] = Sim.CounterStatistic('EmergenciesServed{}'.format(self.name))    # At emergency leaving event
         self.statistics['State'] = Sim.StateStatistic('VehicleState{}'.format(self.name))
+        self.statistics['TimeInSystem'] = Sim.CounterStatistic('TimeInSystem{}'.format(self.name))
 
         # State posibilities
         # 0: Idle                   @ Ambulance end trip event and Ambulance end cleaning
@@ -508,6 +517,7 @@ class EMSModel(Sim.Simulator):
         for v in range(parameters.vehicle_types):
             assert len(parameters.initial_nodes[v]) == int(sum(parameters.ambulance_distribution[0][v]))
 
+
         self.n_vehicles = 0
         for v in range(parameters.vehicle_types):
             cumulative_distribution = np.cumsum(parameters.ambulance_distribution[0][v])
@@ -518,11 +528,31 @@ class EMSModel(Sim.Simulator):
                 # Compute the corresponding borough
                 if i == int(cumulative_distribution[b-1]):
                     b += 1
-
+                    
                 self.insert(Events.AmbulanceArrivalEvent(self, 0, parameters.initial_nodes[v][m],           
-                            Vehicle(parameters.initial_nodes[v][m], v, b, uber=False, name='Ambulance ' + str(self.n_vehicles))))             
+                            Vehicle(parameters.initial_nodes[v][m], v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.random.random()*parameters.vehicle_arrival_deviation/2))             
                 self.n_vehicles += 1
                 i += 1
+        A = []
+        cumu_shifts = np.cumsum(parameters.time_shifts)
+        for t, distribution in enumerate(parameters.ambulance_distribution[1:]):
+            for v in range(parameters.vehicle_types):
+                cumulative_distribution = np.cumsum(distribution[v])
+                b = 1
+                i = 0
+
+                for m in range(int(sum(distribution[v]))):
+                    # Compute the corresponding borough
+                    if i == int(cumulative_distribution[b-1]):
+                        b += 1
+
+                    arrival_time = cumu_shifts[t]*3600 + np.random.random()*parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation/2
+                    hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
+                    A.append(np.clip(-arrival_time, 0, np.inf))
+                    self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,           
+                                Vehicle(hospital_node, v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))             
+                    self.n_vehicles += 1
+                    i += 1
         
         # Schedule the ambulance setting event
         self.insert(Events.HospitalSettingEvent(self, 0))
@@ -540,7 +570,7 @@ class EMSModel(Sim.Simulator):
         self.insert(next(self.arrival_generator))
 
         # Schedule the initializer of the time period change
-        self.insert(Events.ShiftChangeEvent(self, 0))
+        #self.insert(Events.ShiftChangeEvent(self, 0))
 
         # Schedule the first compute Q and P event
         self.insert(Events.ComputeQandPEvent(self, 3600))
@@ -557,6 +587,8 @@ class EMSModel(Sim.Simulator):
 
         self.statistics['AvailableALSVehicles'] = Sim.StateStatistic('AvailableALSVehicles', len(self.getAvaliableVehicles(v_type=0)))
         self.statistics['AvailableBLSVehicles'] = Sim.StateStatistic('AvailableBLSVehicles', len(self.getAvaliableVehicles(v_type=1)))
+        self.statistics['ALSVehiclesInSystem'] = Sim.StateStatistic('ALSVehiclesInSystem')
+        self.statistics['BLSVehiclesInSystem'] = Sim.StateStatistic('BLSVehiclesInSystem')
 
         self.statistics['EmergenciesServed'] = Sim.CounterStatistic('TotalEmergenciesServed')           # @ Emergency leaving event
         self.statistics['EmergenciesTimeInSystem'] = Sim.TallyStatistic('EmergenciesTimeInSystem')      # @ Emergency leaving event

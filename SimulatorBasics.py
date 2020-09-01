@@ -398,6 +398,7 @@ class Statistic:
     def __init__(self, name, *args):
 
         self.name = name
+        self.data = []
 
     def record(self, *args):
         pass

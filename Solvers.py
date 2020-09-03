@@ -3,7 +3,6 @@ import random
 import numpy as np
 import gurobipy as grb
 from typing import Dict, List, Tuple, Optional
-from ortools.linear_solver import pywraplp
 
 # Internal imports
 import Models

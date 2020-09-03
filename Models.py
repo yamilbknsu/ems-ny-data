@@ -77,7 +77,7 @@ class SimulationParameters:
                  time_shifts: List[float] = [8,8,8],
                  vehicle_types: int = 2,
                  initial_nodes: Optional[List[List[str]]] = None,
-                 overload_penalty: float = 1000,
+                 overload_penalty: float = 100,
                  maximum_overload_ALS = .4,
                  maximum_overload_BLS = .4,
                  random_seed: float = 420):

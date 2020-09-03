@@ -20,8 +20,7 @@ General TODO for the project
 """
 
 # Graph importing
-DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//' \
-    + 'Memoria Ambulancias//ems-ny-data//'
+DATA_DIR = ''
 
 with open(DATA_DIR + 'NYC Graph//NYC_graph_revised.pickle', 'rb') as file:
     graph: igraph.Graph = pickle.load(file)

@@ -25,7 +25,7 @@ GAP = [.05]
 EXPERIMENTS = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
                 'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,
                 'parameters_dir': 'HRDemand'}
-                for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction for day in days
+                for day in days for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction
                 for uber in useUber for rep in dataReplica for time in simTime for model in relocatorModel for disp in dispatchers
                 for rel in relocate]
 

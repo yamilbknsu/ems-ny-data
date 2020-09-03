@@ -1,5 +1,6 @@
 # Import Statements
 import os.path
+import argparse
 import pickle
 import igraph
 import numpy as np
@@ -19,6 +20,10 @@ General TODO for the project
 
 """
 
+parser = argparse.ArgumentParser()
+parser.add_argument('-i', type=int, default=0, help='Index of the experiment to run')
+args = parser.parse_args()
+
 # Graph importing
 DATA_DIR = ''
 
@@ -37,39 +42,21 @@ speeds = speeds.drop('Unnamed: 0', axis=1)
 speeds.index = speeds['edgeid']
 speeds = speeds.loc[graph.es['edgeid'], :]
 
-# Testing sets
-days = ['friday']
-dataReplica = [0,1,2]
-simTime = [24*3600]
-relocatorModel = ['survivalNoExp', 'coverage']
-dispatchers = ['preparedness', 'nearest']
-relocate = [True, False] # Online or static
-                        # ALS  BLS
-ambulanceDistribution = [[355, 802]]
-workloadRestriction = [True]
-workloadLimit = [.2]
-useUber = [False, True]
-GAP = [.05]
+with open('experimentsConfig.pickle', 'rb') as f:
+    EXPERIMENTS = pickle.load(f)
 
-EXPERIMENTS: List[Dict[str, Any]] \
-            = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
-                'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,
-                'parameters_dir': 'HRDemand'}
-                for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction for day in days
-                for uber in useUber for rep in dataReplica for time in simTime for model in relocatorModel for disp in dispatchers
-                for rel in relocate]
+experimentInfo = EXPERIMENTS[args.i]
 
-for experiment in EXPERIMENTS:
+name = experimentInfo[0]
+experiment = experimentInfo[1]
 
-    name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'], experiment['dataReplica'], experiment['relocatorModel'], experiment['dispatcher'],
-                                            'Relocate' if experiment['relocate'] else 'NoRelocation', 'Workload' if experiment['workload_restriction'] else 'NoWorkloadRestriction',
-                                            experiment['workload_limit'], 'Uber' if experiment['useUber'] else 'NoUber', experiment['GAP'], experiment['parameters_dir'],
-                                            str(experiment['ambulance_distribution'][0]) + 'ALS' + str(experiment['ambulance_distribution'][1]) + 'BLS')
+skip = False
 
-    if os.path.exists('StatisticsResults/{}.pickle'.format(name)):
-        print('Skipping ' + name)
-        continue
+if os.path.exists('StatisticsResults/{}.pickle'.format(name)):
+    print('Skipping ' + name)
+    skip = True
 
+if not skip:
     with open(DATA_DIR + 'Preprocessing Values//{}//candidate_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
         candidate_nodes = pickle.load(file)
     with open(DATA_DIR + 'Preprocessing Values//{}//demand_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
@@ -149,7 +136,8 @@ for experiment in EXPERIMENTS:
                     maximum_overload_ALS = experiment['workload_limit'],
                     maximum_overload_BLS = experiment['workload_limit'],
                     is_uber_available = experiment['useUber'],
-                    optimization_gap=experiment['GAP']
+                    optimization_gap=experiment['GAP'],
+                    random_seed=args.i
     )
     #ambulance_distribution=[[0, 70, 74, 89, 65, 14],
     #                        [0, 114, 126, 140, 105, 20]]
@@ -161,7 +149,7 @@ for experiment in EXPERIMENTS:
         dispatcher = Solvers.NearestDispatcher()
     elif experiment['dispatcher'] == 'preparedness':
         dispatcher = Solvers.PreparednessDispatcher()
-    
+
     if experiment['relocatorModel'] == 'survival':
         relocator = Solvers.MaxExpectedSurvivalRelocator()
     elif experiment['relocatorModel'] == 'coverage':

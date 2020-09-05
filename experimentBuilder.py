@@ -11,12 +11,12 @@ import Generators
 # Testing sets
 days = ['friday', 'monday']
 dataReplica = list(range(10))
-simTime = [24*3600]
+simTime = [3600]
 relocatorModel = ['survivalNoExp', 'coverage']
 dispatchers = ['preparedness', 'nearest']
 relocate = [True, False] # Online or static
                         # ALS  BLS
-ambulanceDistribution = [[355, 802], [337, 761], [319, 722], [301, 681]]
+ambulanceDistribution = [[355, 802], [337, 761], [319, 722], [301, 681], [284,642]]
 workloadRestriction = [True]
 workloadLimit = [.2]
 useUber = [False, True]

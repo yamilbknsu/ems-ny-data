@@ -315,7 +315,10 @@ class MaxSingleCoverRelocator(RelocationModel):
         model.setParam('MIPGap',  simulator.parameters.optimization_gap)
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
-        simulator.statistics['GAPALSPart1'].record(simulator.now(), model.MIPGap)
+        try:
+            simulator.statistics['GAPALSPart1'].record(simulator.now(), model.MIPGap)
+        except:
+            pass
         print(time.time() - start_time, '- Done!')
 
         # -------------------------
@@ -444,7 +447,10 @@ class MaxSingleCoverRelocator(RelocationModel):
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
 
-        simulator.statistics['GAPBLSPart1'].record(simulator.now(), model.MIPGap)
+        try:
+            simulator.statistics['GAPBLSPart1'].record(simulator.now(), model.MIPGap)
+        except:
+            pass
         print(time.time() - start_time, '- Done!')
 
          # -------------------------
@@ -655,7 +661,10 @@ class MaxExpectedSurvivalRelocator(RelocationModel):
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
 
-        simulator.statistics['GAPALSPart1'].record(simulator.now(), model.MIPGap)
+        try:
+            simulator.statistics['GAPALSPart1'].record(simulator.now(), model.MIPGap)
+        except:
+            pass
 
         print(time.time() - start_time, '- Done!')
 
@@ -726,7 +735,11 @@ class MaxExpectedSurvivalRelocator(RelocationModel):
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
 
-        simulator.statistics['GAPALSPart2'].record(simulator.now(), model.MIPGap)
+        try:
+            simulator.statistics['GAPALSPart2'].record(simulator.now(), model.MIPGap)
+        except:
+            pass
+
         print(time.time() - start_time, '- Done!')
         
         
@@ -1032,7 +1045,10 @@ class MaxSurvivalRelocator(RelocationModel):
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
 
-        simulator.statistics['GAPALSPart1'].record(simulator.now(), model.MIPGap)
+        try:
+            simulator.statistics['GAPALSPart1'].record(simulator.now(), model.MIPGap)
+        except:
+            pass
 
         print(time.time() - start_time, '- Done!')
 
@@ -1209,7 +1225,10 @@ class MaxSurvivalRelocator(RelocationModel):
         print(time.time() - start_time, '- Solving the model...')
         status = model.optimize()
 
-        simulator.statistics['GAPBLSPart1'].record(simulator.now(), model.MIPGap)
+        try:
+            simulator.statistics['GAPBLSPart1'].record(simulator.now(), model.MIPGap)
+        except:
+            pass
         print(time.time() - start_time, '- Done!')
         
         # -------------------------
@@ -1283,8 +1302,11 @@ class MaxSurvivalRelocator(RelocationModel):
             for i, node in enumerate(actual_positions):
                 if node != target_positions[reposition_matrix[i].index(1)]:
                     final_repositioning[actual_BLS_vehicles_pos[node]] = target_positions[reposition_matrix[i].index(1)]
-        
-            simulator.statistics['GAPBLSPart2'].record(simulator.now(), model.MIPGap)
+
+            try:
+                simulator.statistics['GAPBLSPart2'].record(simulator.now(), model.MIPGap)
+            except:
+                pass
 
         else:
             print('Problem was unfeasible.')

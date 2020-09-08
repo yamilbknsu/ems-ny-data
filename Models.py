@@ -533,7 +533,7 @@ class EMSModel(Sim.Simulator):
                             Vehicle(parameters.initial_nodes[v][m], v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.random.random()*parameters.vehicle_arrival_deviation/2))             
                 self.n_vehicles += 1
                 i += 1
-        A = []
+
         cumu_shifts = np.cumsum(parameters.time_shifts)
         for t, distribution in enumerate(parameters.ambulance_distribution[1:]):
             for v in range(parameters.vehicle_types):
@@ -548,7 +548,25 @@ class EMSModel(Sim.Simulator):
 
                     arrival_time = cumu_shifts[t]*3600 + np.random.random()*parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation/2
                     hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
-                    A.append(np.clip(-arrival_time, 0, np.inf))
+                    self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,           
+                                Vehicle(hospital_node, v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))             
+                    self.n_vehicles += 1
+                    i += 1
+        
+        day_offset = 24*3600
+        for t, distribution in enumerate(parameters.ambulance_distribution):
+            for v in range(parameters.vehicle_types):
+                cumulative_distribution = np.cumsum(distribution[v])
+                b = 1
+                i = 0
+
+                for m in range(int(sum(distribution[v]))):
+                    # Compute the corresponding borough
+                    if i == int(cumulative_distribution[b-1]):
+                        b += 1
+
+                    arrival_time = cumu_shifts[t]*3600 + np.random.random()*parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation/2 + day_offset
+                    hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
                     self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,           
                                 Vehicle(hospital_node, v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))             
                     self.n_vehicles += 1

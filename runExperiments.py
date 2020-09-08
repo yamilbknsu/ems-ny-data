@@ -138,7 +138,8 @@ for i in range((args.i)*10, (args.i+1)*10):
                         maximum_overload_BLS = experiment['workload_limit'],
                         is_uber_available = experiment['useUber'],
                         optimization_gap=experiment['GAP'],
-                        random_seed=args.i
+                        random_seed=args.i,
+                        relocation_period=experiment['relocation_period']
         )
         #ambulance_distribution=[[0, 70, 74, 89, 65, 14],
         #                        [0, 114, 126, 140, 105, 20]]

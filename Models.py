@@ -554,6 +554,7 @@ class EMSModel(Sim.Simulator):
                     i += 1
         
         day_offset = 24*3600
+        cumu_shifts = np.cumsum(parameters.time_shifts) - 8
         for t, distribution in enumerate(parameters.ambulance_distribution):
             for v in range(parameters.vehicle_types):
                 cumulative_distribution = np.cumsum(distribution[v])

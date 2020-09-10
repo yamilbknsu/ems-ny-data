@@ -10,7 +10,7 @@ import Generators
 
 # Testing sets
 days = ['friday', 'monday']
-dataReplica = list(range(10))
+dataReplica = list(range(15))
 simTime = [36*3600]
 relocatorModel = ['survivalNoExp', 'coverage']
 dispatchers = ['preparedness', 'nearest']
@@ -21,7 +21,7 @@ workloadRestriction = [True]
 workloadLimit = [.2]
 useUber = [False, True]
 GAP = [.05]
-relocationPeriod = [300]
+relocationPeriod = [600]
 
 EXPERIMENTS = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
                 'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,

@@ -1132,7 +1132,8 @@ class MaxSurvivalRelocator(RelocationModel):
 
         reposition_matrix = [[x[i][j].x for j in range(len(target_positions))] for i in range(len(actual_positions))]
         for i, node in enumerate(actual_positions):
-            final_repositioning[actual_ALS_vehicles_pos[node]] = target_positions[reposition_matrix[i].index(1)]
+            if len(reposition_matrix[i]) > 0:
+                final_repositioning[actual_ALS_vehicles_pos[node]] = target_positions[reposition_matrix[i].index(1)]
 
         if not initial:
             pass

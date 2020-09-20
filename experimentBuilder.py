@@ -11,7 +11,7 @@ import Generators
 # Testing sets
 days = ['friday', 'monday']
 dataReplica = list(range(15))
-simTime = [36*3600]
+simTime = [24*3600]
 relocatorModel = ['survivalNoExp', 'coverage']
 dispatchers = ['preparedness', 'nearest']
 relocate = [True, False] # Online or static

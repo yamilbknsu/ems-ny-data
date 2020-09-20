@@ -421,7 +421,7 @@ class TripAssignedEvent(Sim.Event):
             if self.node is None:
                 print("WHAAT?")
 
-            if not self.vehicle.moving:
+            if (not self.vehicle.moving) or (self.vehicle.pos == self.vehicle.to_node):
                 # Compute shortest path for vehicle
                 path: List[List[int]] = simulator.getShortestPath(self.vehicle.pos, self.node)
 

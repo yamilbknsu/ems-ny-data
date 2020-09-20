@@ -1,6 +1,7 @@
 import time
 import igraph
 import numpy as np
+from pprint import pprint
 from typing import List, Optional
 
 # Internal imports
@@ -414,6 +415,8 @@ class TripAssignedEvent(Sim.Event):
         self.message: str = "{} assigned to move to node {}".format(vehicle.name, node)
 
     def execute(self, simulator: "Models.EMSModel"):
+        pprint(vars(self))
+        pprint(vars(self.vehicle))
         if self.node != self.vehicle.pos:
             if self.node is None:
                 print("WHAAT?")

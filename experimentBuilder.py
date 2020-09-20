@@ -21,7 +21,7 @@ workloadRestriction = [True]
 workloadLimit = [.2]
 useUber = [False, True]
 GAP = [.05]
-relocationPeriod = [600]
+relocationPeriod = [300]
 
 EXPERIMENTS = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
                 'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,

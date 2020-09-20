@@ -313,7 +313,6 @@ class SimulationParameters:
         self.P[self.P < 0] = 0
 
 
-
 class Vehicle(Sim.SimulationEntity):
     """
     Object representing a vechicle that can move through a graph.
@@ -655,7 +654,6 @@ class EMSModel(Sim.Simulator):
         self.statistics['GAPBLSPart2'] = Sim.TimedTallyStatistic('GAPBLSPart2')                         # @ Solver relocate
 
         self.statistics['EmergenciesWaiting'] = Sim.StateStatistic('EmergenciesWaiting')
-
 
         # Tuples of the form
         # (emergency name, node, severity, arrival time, attending time, to_hospital_time, disposition code, hospital)

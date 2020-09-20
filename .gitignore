@@ -7,3 +7,5 @@ JSON events/
 prueba.sbatch
 prueba.py
 dataSummary.xlsx
+Analysis.py
+emergenciesPlot.svg

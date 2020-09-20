@@ -316,9 +316,8 @@ class AmbulanceEndTripEvent(Sim.Event):
         self.message: str = '{} finished trip to node {}'.format(vehicle.name, vehicle.pos)
     
     def execute(self, simulator: "Models.EMSModel"):
+        status = self.vehicle.onPathEnded()
         if self.valid:
-            status = self.vehicle.onPathEnded()
-
             if status == 0:
                 self.vehicle.statistics['State'].record(simulator.now(), 0)
 

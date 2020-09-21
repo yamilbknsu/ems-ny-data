@@ -20,24 +20,26 @@ ambulanceDistribution = [[355, 802], [337, 761], [319, 722], [301, 681], [284,64
 workloadRestriction = [True]
 workloadLimit = [.2]
 useUber = [False, True]
+uberRatio = [.5,1]
 GAP = [.05]
-relocationPeriod = [300]
+relocationPeriod = [600]
 
 EXPERIMENTS = [{'day': day, 'dataReplica': rep, 'simTime': time, 'relocatorModel': model, 'dispatcher': disp,
                 'relocate': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'useUber': uber, 'GAP': gap,
-                'parameters_dir': 'HRDemand', 'relocation_period': reloc_period}
+                'parameters_dir': 'HRDemand', 'relocation_period': reloc_period, 'uberRatio': uR}
                 for day in days for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction
                 for uber in useUber for rep in dataReplica for time in simTime for model in relocatorModel for disp in dispatchers for reloc_period in relocationPeriod
-                for rel in relocate]
+                for rel in relocate for uR in uberRatio]
 
 output = []
 
 for experiment in EXPERIMENTS:
 
-    name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'], experiment['dataReplica'], experiment['relocatorModel'], experiment['dispatcher'],
+    name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'], experiment['dataReplica'], experiment['relocatorModel'], experiment['dispatcher'],
                                             'Relocate' if experiment['relocate'] else 'NoRelocation', 'Workload' if experiment['workload_restriction'] else 'NoWorkloadRestriction',
                                             experiment['workload_limit'], 'Uber' if experiment['useUber'] else 'NoUber', experiment['GAP'], experiment['parameters_dir'],
-                                            str(experiment['ambulance_distribution'][0]) + 'ALS' + str(experiment['ambulance_distribution'][1]) + 'BLS', experiment['relocation_period'], experiment['simTime'])
+                                            str(experiment['ambulance_distribution'][0]) + 'ALS' + str(experiment['ambulance_distribution'][1]) + 'BLS', experiment['relocation_period'], experiment['simTime'],
+                                            experiment['uberRatio'])
     output.append([name, experiment])
 
 with open('experimentsConfig.pickle', 'wb') as f:

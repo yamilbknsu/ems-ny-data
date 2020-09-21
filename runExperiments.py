@@ -137,6 +137,7 @@ for i in range((args.i)*10, (args.i+1)*10):
                         maximum_overload_ALS = experiment['workload_limit'],
                         maximum_overload_BLS = experiment['workload_limit'],
                         is_uber_available = experiment['useUber'],
+                        uber_low_severity_ratio=experiment['uberRatio'],
                         optimization_gap=experiment['GAP'],
                         random_seed=args.i,
                         relocation_period=experiment['relocation_period']

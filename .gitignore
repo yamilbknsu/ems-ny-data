@@ -9,3 +9,7 @@ prueba.py
 dataSummary.xlsx
 Analysis.py
 emergenciesPlot.svg
+*.pdf
+*.xlsx
+*.svg
+KDEplot.pdf

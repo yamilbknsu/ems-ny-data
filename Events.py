@@ -164,7 +164,7 @@ class EmergencyLeaveSystemEvent(Sim.Event):
         simulator.time_records[(simulator.timePeriod(), severity, self.emergency.node)].append(simulator.now() - self.emergency.vehicle_assigned_time)
 
         simulator.emergencyRecord.append((self.emergency.name, self.emergency.node, self.emergency.severity, self.emergency.arrival_time,
-                                         self.emergency.start_attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital, (self.vehicle is not None and self.vehicle.isUber)  ))
+                                         self.emergency.start_attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital, (self.vehicle is not None and self.vehicle.isUber)))
 
         simulator.activeEmergencies.remove(self.emergency)
         if self.emergency in simulator.assignedEmergencies:

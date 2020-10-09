@@ -637,7 +637,7 @@ class EMSModel(Sim.Simulator):
         self.statistics['SpatialHS10minCover'] = Sim.SpatialStatistic('SpatialHS10minCover')            # @ Ambulance end trip event
         self.statistics['SpatialHS8minCover'] = Sim.SpatialStatistic('SpatialHS8minCover')              # @ Ambulance end trip event
         self.statistics['SpatialHS7minCover'] = Sim.SpatialStatistic('SpatialHS7minCover')              # @ Ambulance end trip event
-    
+
         self.statistics['SpatialHSAverageResponseTime'] = Sim.SpatialStatistic('SpatialHSAverageResponseTime')            # @ Ambulance end trip event        
         self.statistics['SpatialLSAverageResponseTime'] = Sim.SpatialStatistic('SpatialLSAverageResponseTime')            # @ Ambulance end trip event       
         self.statistics['SpatialGeneralAverageResponseTime'] = Sim.SpatialStatistic('SpatialGeneralAverageResponseTime')  # @ Ambulance end trip event      

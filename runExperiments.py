@@ -45,7 +45,7 @@ speeds = speeds.loc[graph.es['edgeid'], :]
 with open('experimentsConfig.pickle', 'rb') as f:
     EXPERIMENTS = pickle.load(f)
 
-for i in range((args.i)*10, (args.i+1)*10):
+for i in range((args.i)*15, (args.i+1)*15):
     experimentInfo = EXPERIMENTS[i]
 
     name = experimentInfo[0]

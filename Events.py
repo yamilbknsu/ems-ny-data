@@ -100,7 +100,10 @@ class RelocationEvent(Sim.Event):
                 simulator.statistics['SpatialALSRelocation'].record(simulator.now(), candidate, 1 if candidate in optimal_positions[0] else 0)
                 simulator.statistics['SpatialBLSRelocation'].record(simulator.now(), candidate, 1 if candidate in optimal_positions[1] else 0)
         
-        simulator.insert(RelocationEvent(simulator, simulator.now() + simulator.parameters.relocation_period))
+        if simulator.parameters.relocation_optimization:
+            simulator.insert(RelocationEvent(simulator, simulator.now() + simulator.parameters.relocation_period))
+        else:
+            simulator.insert(RelocationEvent(simulator, simulator.now() + 8*3600))
 
 
 class InitialPositioningEvent(Sim.Event):
@@ -138,6 +141,9 @@ class InitialPositioningEvent(Sim.Event):
             
             if simulator.parameters.relocation_optimization:
                 simulator.insert(RelocationEvent(simulator, simulator.now() + simulator.parameters.relocation_period))
+            else:
+                simulator.insert(RelocationEvent(simulator, 8.5*3600))
+
 
 class EmergencyLeaveSystemEvent(Sim.Event):
 

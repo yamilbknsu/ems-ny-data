@@ -81,7 +81,7 @@ speeds.index = speeds['edgeid']
 speeds = speeds.loc[graph.es['edgeid'], :]
 
 experiment = {'day': 'friday', 'dataReplica': 0, 'simTime': 24*3600, 'relocatorModel': 'survivalNoExp', 'dispatcher': 'preparedness',
-                'relocate': True, 'ambulance_distribution': [355, 802], 'workload_restriction': True, 'workload_limit': .2, 'useUber': True, 'GAP': .05,
+                'relocate': True, 'ambulance_distribution': [284, 642], 'workload_restriction': True, 'workload_limit': .2, 'useUber': True, 'GAP': .05,
                 'parameters_dir': 'HRDemand', 'relocation_period': 600, 'uberRatio': .5}
 
 with open(DATA_DIR + 'Preprocessing Values//{}//candidate_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:

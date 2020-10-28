@@ -20,8 +20,8 @@ General TODO for the project
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', type=int, default=0, help='Index of the experiment to run')
-parser.add_argument('-n', type=int, default=10, help='Number of replicas per task')
+parser.add_argument('-i', type=int, default=233, help='Index of the experiment to run')
+parser.add_argument('-n', type=int, default=1, help='Number of replicas per task')
 args = parser.parse_args()
 
 # Graph importing

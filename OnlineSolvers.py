@@ -64,7 +64,7 @@ class UberRelocatorDispatcher(RelocationModel):
             uncovered_penalty = params.uncovered_penalty
             late_response_penalty = params.late_response_penalty
             dispatching_penalty = params.dispatching_penalty
-            RHS_limit = params.uber_seconds * simulator.now() / params.simulation_time
+            RHS_limit = max(params.uber_seconds * simulator.now() / params.simulation_time, simulator.uber_seconds)
             inf_travel_time = np.sum(cand_demand_travel[t])
 
         # Sets

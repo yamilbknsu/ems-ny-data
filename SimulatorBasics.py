@@ -163,6 +163,8 @@ class Simulator(AbstractSimulator):
         self.verbose = verbose
         self.events = ListQueue() # here you are passing the scheduler
 
+        self.log = []
+
     def now(self):
         '''
         This methods returns the simulation time
@@ -196,6 +198,7 @@ class Simulator(AbstractSimulator):
             e = self.events.removeFirst()
             if self.verbose:
                 print(secondsToTimestring(e.time), e.message)
+                self.log.append(secondsToTimestring(e.time) + e.message)
 
             # Update simulation time
             self.time = e.time
@@ -209,6 +212,7 @@ class Simulator(AbstractSimulator):
             while chained_event is not None:
                 if self.verbose:
                     print('{:>17}'.format('### Chained:'), chained_event.message)
+                    self.log.append('{:>17}'.format('### Chained:') + chained_event.message)
                 chained_event = chained_event.execute(self)
 
         self.recoverMetrics() 
@@ -284,6 +288,7 @@ class ListQueue(object):
         '''
         if isinstance(x, Event):
             heappush(self.elements, x)
+            # heapify(self.elements)
         else:
             raise ValueError('This is not an event')
 

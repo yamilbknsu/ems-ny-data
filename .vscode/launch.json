@@ -4,7 +4,6 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
         {
             "name": "Project: Launch main (Experiments.py)",
             "type": "python",
@@ -92,6 +91,29 @@
             "cwd": "${workspaceRoot}",
             "env": {},
             "envFile": "${workspaceRoot}/.env"
+        },
+        {
+            "name": "Experimental",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "pythonPath": "${command:python.interpreterPath}",
+            "program": "Experiment.py",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
+        },
+        {
+            "name": "ExperimentsBuilder",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "pythonPath": "${command:python.interpreterPath}",
+            "program": "experimentBuilder.py",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
+
         }
     ]
 }

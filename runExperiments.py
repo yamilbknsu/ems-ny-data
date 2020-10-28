@@ -3,15 +3,14 @@ import os.path
 import argparse
 import pickle
 import igraph
-import numpy as np
 import pandas as pd
 import geopandas as gpd
-from typing import List, Dict, Any, Optional
+from typing import List
 
 # Internal Imports
 import Models
 import Events
-import Solvers
+import OnlineSolvers
 import Generators
 
 """
@@ -22,6 +21,7 @@ General TODO for the project
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i', type=int, default=0, help='Index of the experiment to run')
+parser.add_argument('-n', type=int, default=10, help='Number of replicas per task')
 args = parser.parse_args()
 
 # Graph importing
@@ -33,8 +33,7 @@ with open(DATA_DIR + 'NYC Graph//NYC_graph_revised.pickle', 'rb') as file:
 # Importing parameters
 nodes_with_borough = gpd.read_file(DATA_DIR + 'NYC Graph//NYC_nodes_w_borough//NYC_nodes_w_borough.shp')
 
-
- # Load the speeds df
+# Load the speeds df
 speeds = pd.read_csv(DATA_DIR + 'NYC Graph//edge_speeds_vicky.csv')
 speeds = speeds.drop('Unnamed: 0', axis=1)
 
@@ -45,7 +44,7 @@ speeds = speeds.loc[graph.es['edgeid'], :]
 with open('experimentsConfig.pickle', 'rb') as f:
     EXPERIMENTS = pickle.load(f)
 
-for i in range((args.i)*10, (args.i+1)*10):
+for i in range((args.i) * args.n, (args.i + 1) * args.n):
     experimentInfo = EXPERIMENTS[i]
 
     name = experimentInfo[0]
@@ -95,6 +94,8 @@ for i in range((args.i)*10, (args.i+1)*10):
             reachable_inverse = pickle.load(file)
         with open(DATA_DIR + 'Preprocessing Values//{}//uber_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
             uber_nodes = pickle.load(file)
+        with open(DATA_DIR + 'Preprocessing Values//{}//graph_to_demand.pickle'.format(experiment['parameters_dir']), 'rb') as file:
+            graph_to_demand = pickle.load(file)
 
         print('Starting ' + name)
         # Importing low severity emergencies file
@@ -105,64 +106,52 @@ for i in range((args.i)*10, (args.i+1)*10):
         with open(DATA_DIR + 'Arrival Events//{}//HS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
             emergencies += pickle.load(file)
 
+        generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
 
-        generator: Generators.ArrivalGenerator = \
-                Generators.CustomArrivalsGenerator([e for e in emergencies])
-
-        sim_parameters = Models.SimulationParameters(
-                        simulation_time=experiment['simTime'],
-                        initial_nodes=None,
-                        speeds_df = speeds,
-                        candidate_nodes=candidate_nodes,
-                        hospital_nodes=hospital_nodes,
-                        hospital_borough=hospital_borough,
-                        nodes_with_borough=nodes_with_borough,
-                        demand_nodes=demand_nodes,
-                        demand_rates=demand_rates,
-                        ALS_tours=experiment['ambulance_distribution'][0],
-                        BLS_tours= experiment['ambulance_distribution'][1],
-                        mean_busytime=busy_time,
-                        cand_cand_time=cand_cand_time,
-                        cand_demand_time=cand_demand_time,
-                        neighborhood=neighborhood,
-                        neighborhood_candidates=neighborhood_candidates,
-                        neighbor_k=neighborhood_k,
-                        candidates_borough=candidate_borough,
-                        demand_borough=demand_borough,
-                        reachable_demand=reachable_demand,
-                        reachable_inverse=reachable_inverse,
-                        uber_nodes=uber_nodes,
-                        relocation_optimization = experiment['relocate'],
-                        apply_workload_restriction = experiment['workload_restriction'],
-                        maximum_overload_ALS = experiment['workload_limit'],
-                        maximum_overload_BLS = experiment['workload_limit'],
-                        is_uber_available = experiment['useUber'],
-                        uber_low_severity_ratio=experiment['uberRatio'],
-                        optimization_gap=experiment['GAP'],
-                        random_seed=args.i,
-                        relocation_period=experiment['relocation_period']
-        )
-        #ambulance_distribution=[[0, 70, 74, 89, 65, 14],
+        sim_parameters = Models.SimulationParameters(simulation_time=experiment['simTime'],
+                                                     initial_nodes=None,
+                                                     speeds_df=speeds,
+                                                     candidate_nodes=candidate_nodes,
+                                                     hospital_nodes=hospital_nodes,
+                                                     hospital_borough=hospital_borough,
+                                                     nodes_with_borough=nodes_with_borough,
+                                                     graph_to_demand=graph_to_demand,
+                                                     demand_nodes=demand_nodes,
+                                                     demand_rates=demand_rates,
+                                                     ALS_tours=experiment['ambulance_distribution'][0],
+                                                     BLS_tours=experiment['ambulance_distribution'][1],
+                                                     mean_busytime=busy_time,
+                                                     cand_cand_time=cand_cand_time,
+                                                     cand_demand_time=cand_demand_time,
+                                                     neighborhood=neighborhood,
+                                                     neighborhood_candidates=neighborhood_candidates,
+                                                     neighbor_k=neighborhood_k,
+                                                     candidates_borough=candidate_borough,
+                                                     demand_borough=demand_borough,
+                                                     reachable_demand=reachable_demand,
+                                                     reachable_inverse=reachable_inverse,
+                                                     uber_nodes=uber_nodes,
+                                                     maximum_overload_ALS=experiment['workload_limit'],
+                                                     maximum_overload_BLS=experiment['workload_limit'],
+                                                     uber_seconds=experiment['uberHours'] * 3600,
+                                                     optimization_gap=experiment['GAP'],
+                                                     max_expected_simultaneous_relocations=experiment['relocQty'],
+                                                     force_static=experiment['static'],
+                                                     uncovered_penalty=experiment['uncovered'],
+                                                     late_response_penalty=experiment['lateResponse'],
+                                                     dispatching_penalty=experiment['disaptchingPenalt'],
+                                                     travel_distance_penalty=experiment['ttPenalty'],
+                                                     target_relocation_time=experiment['targetReloc'],
+                                                     relocation_cooldown=experiment['relocCooldown'],
+                                                     max_relocation_time=experiment['maxReloc'],
+                                                     random_seed=0)
+        # ambulance_distribution=[[0, 70, 74, 89, 65, 14],
         #                        [0, 114, 126, 140, 105, 20]]
 
-        dispatcher: Solvers.DispatcherModel = Solvers.DispatcherModel()
-        relocator: Solvers.RelocationModel = Solvers.RelocationModel()
+        if experiment['model'] == 'SBRDA':
+            optimizer = OnlineSolvers.UberRelocatorDispatcher()
 
-        if experiment['dispatcher'] == 'nearest':
-            dispatcher = Solvers.NearestDispatcher()
-        elif experiment['dispatcher'] == 'preparedness':
-            dispatcher = Solvers.PreparednessDispatcher()
-
-        if experiment['relocatorModel'] == 'survival':
-            relocator = Solvers.MaxExpectedSurvivalRelocator()
-        elif experiment['relocatorModel'] == 'coverage':
-            relocator = Solvers.MaxSingleCoverRelocator()
-        elif experiment['relocatorModel'] == 'survivalNoExp':
-            relocator = Solvers.MaxSurvivalRelocator()
-        elif experiment['relocatorModel'] == 'survivalExpCoverage':
-            relocator = Solvers.MaxExpectedSurvivalCoverageRelocator()
-
-        simulator: Models.EMSModel = Models.EMSModel(graph, generator, dispatcher, relocator, sim_parameters, verbose=False)
+        simulator: Models.EMSModel = Models.EMSModel(graph, generator, parameters=sim_parameters, optimizer=optimizer, verbose=True)
         statistics = simulator.run()
 
         with open('StatisticsResults/{}.pickle'.format(name), 'wb') as f:

@@ -294,8 +294,13 @@ class AmbulanceRedeployEvent(Sim.Event):
         self.message: str = '{} redeploying...'.format(vehicle.name)
 
     def execute(self, simulator: "Models.EMSModel"):
-        return TripAssignedEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.station)
+        # return TripAssignedEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.station)
         # return RelocationAndDispatchingEvent(simulator, simulator.now(), self.vehicle.type, self.vehicle.borough)
+
+        if not self.vehicle.isUber:
+            optimal_positions, reposition_dict = simulator.optimizer.redeploy(simulator, simulator.parameters, self.vehicle)
+            self.vehicle.station = reposition_dict[self.vehicle]
+            simulator.insert(TripAssignedEvent(simulator, simulator.now(), self.vehicle, reposition_dict[self.vehicle]))
 
 
 class AmbulanceEndCleaningEvent(Sim.Event):

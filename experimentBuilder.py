@@ -4,7 +4,7 @@ import pickle
 # Testing sets
 days = ['friday']
 model = ['SBRDA']
-dataReplica = list(range(15))
+dataReplica = list(range(2))
 simTime = [24 * 3600]
 static = [False]
 uberHours = [12000 / 60, 6000 / 60, 0]
@@ -13,10 +13,10 @@ workloadRestriction = [True]
 workloadLimit = [.4]
 simultaneous_relocations = [4, 6, 8, 10, 12, 15]
 uncovered_penalty = [10 * 24 * 3600]
-late_response_penalty = [60, 100]
+late_response_penalty = [60]
 dispatching_penalty = [.01, 0]
 travel_distance_penalty = [1e-6, 0]
-target_relocTime = [2160, 4320]
+target_relocTime = [2160]
 max_relocation_time = [1200, 2400]
 relocation_cooldown = [3600]
 GAP = [.05]

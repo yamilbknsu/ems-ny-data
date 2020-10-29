@@ -23,6 +23,12 @@ class RelocationModel:
         print('Warning! Relocation not implemented')
         return [], {}, {}
 
+    def redeploy(self,
+                 simulator: "Models.EMSModel",
+                 params: "Models.SimulationParameters",
+                 vehicle: "Models.Vehicle"):
+        return [], {}
+
 
 class UberRelocatorDispatcher(RelocationModel):
 
@@ -297,7 +303,7 @@ class UberRelocatorDispatcher(RelocationModel):
              for e, emergency in enumerate(E)}
 
         model.setParam('MIPGap', params.optimization_gap)
-        # model.setParam('LogToConsole', 0)
+        model.setParam('LogToConsole', 1 if simulator.verbose else 0)
 
         print(time.time() - start_time, '- Solving the model...')
         model.optimize()
@@ -332,3 +338,140 @@ class UberRelocatorDispatcher(RelocationModel):
         if severity == 0:
             print()
         return final_positions, final_repositioning, final_dispatching
+
+    def redeploy(self,
+                 simulator: "Models.EMSModel",
+                 params: "Models.SimulationParameters",
+                 vehicle: "Models.Vehicle"):
+        severity = vehicle.type
+        borough = vehicle.borough
+        print('Borough', borough, 'at', SimulatorBasics.secondsToTimestring(simulator.now()))
+        print(1, 'at', len(params.candidates_borough[borough]))
+
+        # Initialize return list
+        # This list will hold the final optimal positions of the ambulances
+        final_positions: List[str] = []
+
+        # Initialize the return dict
+        # This will hold the vehicle repositioning values
+        final_repositioning: Dict["Models.Vehicle", str] = {}
+
+        # Parameters
+        t = simulator.timePeriod()
+        D_rates = params.demand_rates
+        reachable_inverse = params.reachable_inverse[t]
+        cand_demand_travel = params.cand_demand_time[t]
+
+        if severity == 1:
+            inf_travel_time = np.sum(cand_demand_travel[t])
+
+        # Sets
+        C = params.candidates_borough[borough]
+        D = params.demand_borough[borough]
+        Vehicles = simulator.getAvaliableVehicles(severity, borough)
+        U = {v.station: v for v in Vehicles if v != vehicle}
+        U_nodes = list(U.keys())
+
+        # First stage
+        print('REDEPLOYING {} FOR BOROUGH {}'.format(vehicle.name, borough))
+        start_time = time.time()
+
+        # Create the mip solver with the CBC backend.
+        model = grb.Model(name="ALS Redeployment" if severity == 0 else "BLS Redeployment")
+
+        # Declare model variables
+        # x_ji: if node i is covered by node j
+        x = [[model.addVar(vtype=grb.GRB.BINARY, name='x_' + node + '_' + c_node) for node in D] for c_node in C]
+        # y_j: if ambulance is located at j at the end
+        y = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node) for j, node in enumerate(C)]
+        # r_uj: if ambulance moves from u to j
+        r = [model.addVar(vtype=grb.GRB.BINARY, name='r_' + j) for j in C]
+
+        if severity == 1:
+            # h_i: if demand node is uncovered
+            h = [model.addVar(vtype=grb.GRB.BINARY, name='h_' + node) for i, node in enumerate(D)]
+
+        # Coefficients
+        # ------------
+        if severity == 0:
+            survival_matrix = self.SurvivalFunction(cand_demand_travel / 60)  # Travel time in minutes
+
+        # Filter the survival matrix leaving only the nodes that are reachable,
+        # 0 to all the rest
+        if severity == 0:
+            filtered_survival = np.array([[survival_matrix[j, i] if c_node in params.reachable_inverse[t][d_node] else 0
+                                           for j, c_node in enumerate(C)]
+                                          for i, d_node in enumerate(D)]).T
+        else:
+            filtered_survival = np.array([[cand_demand_travel[j, i] if c_node in params.reachable_inverse[t][d_node] else inf_travel_time
+                                           for j, c_node in enumerate(C)]
+                                          for i, d_node in enumerate(D)]).T
+
+        # [j, i] matrix respresenting psi_{i,j} * d_i
+        coefficients = D_rates[severity].loc[t + 1, D].values * filtered_survival
+
+        if severity == 0:
+            # Objective function
+            model.setObjective(grb.quicksum(grb.quicksum(coefficients[C.index(c_node), i] * x[C.index(c_node)][i] if c_node in C else 0
+                                            for c_node in reachable_inverse[d_node])
+                               for i, d_node in enumerate(D)))
+            model.ModelSense = grb.GRB.MAXIMIZE
+        else:
+            # Objective function
+            model.setObjective(grb.quicksum(grb.quicksum(coefficients[C.index(c_node), i] * x[C.index(c_node)][i] + inf_travel_time * h[i] if c_node in C else 0
+                                            for c_node in reachable_inverse[d_node])
+                               for i, d_node in enumerate(D)))
+            model.ModelSense = grb.GRB.MINIMIZE
+
+        # Constraint 1
+        # x_{ij} \leq y_j \forall i, j \in N_i
+        {(i, j): model.addConstr(lhs=x[C.index(c_node)][i],
+                                 sense=grb.GRB.LESS_EQUAL,
+                                 rhs=y[C.index(c_node)],
+                                 name='Const_1_{}_{}'.format(i, j))
+         for i, d_node in enumerate(D)
+         for j, c_node in enumerate(params.reachable_inverse[t][d_node]) if c_node in C}
+
+        if severity == 0:
+            # Constraint 2
+            # sum_{j \in Lambda_i} x_{ij} \leq 1
+            {i: model.addConstr(lhs=grb.quicksum(x[C.index(j)][i] for j in C),
+                                sense=grb.GRB.LESS_EQUAL,
+                                rhs=1,
+                                name='Const_2_{}'.format(i))
+             for i, d_node in enumerate(D)}
+        else:
+            # Constraint 2
+            # sum_{j \in Lambda_i} x_{ij} + h_i = 1
+            {i: model.addConstr(lhs=grb.quicksum(x[C.index(j)][i] if j in C else 0 for j in params.reachable_inverse[t][d_node]) + h[i],
+                                sense=grb.GRB.EQUAL,
+                                rhs=1,
+                                name='Const_2_{}'.format(i))
+             for i, d_node in enumerate(D)}
+
+        {j: model.addConstr(lhs=y[j],
+                            sense=grb.GRB.EQUAL,
+                            rhs=(1 if c_node in U_nodes else 0) + r[C.index(c_node)],
+                            name='Const_3_{}'.format(j))
+            for j, c_node in enumerate(C)}
+
+        model.addConstr(lhs=grb.quicksum(r),
+                        sense=grb.GRB.EQUAL,
+                        rhs=1,
+                        name='Const_4')
+
+        model.setParam('MIPGap', params.optimization_gap)
+        model.setParam('LogToConsole', 1 if simulator.verbose else 0)
+
+        print(time.time() - start_time, '- Solving the model...')
+        model.optimize()
+
+        print(time.time() - start_time, '- Done!')
+
+        final_positions = []
+        for j in range(len(C)):
+            if y[j].x == 1:
+                final_positions.append(C[j])
+        final_repositioning[vehicle] = final_positions[([r[C.index(j)].x for j in final_positions]).index(1)]
+
+        return final_positions, final_repositioning

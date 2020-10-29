@@ -88,7 +88,7 @@ with open(DATA_DIR + 'Arrival Events//{}//HS19//strep_{}.pickle'.format('Friday'
 
 generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
 
-sim_parameters = Models.SimulationParameters(simulation_time=12 * 3600,
+sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
                                              initial_nodes=None,
                                              speeds_df=speeds,
                                              candidate_nodes=candidate_nodes,
@@ -111,9 +111,9 @@ sim_parameters = Models.SimulationParameters(simulation_time=12 * 3600,
                                              reachable_demand=reachable_demand,
                                              reachable_inverse=reachable_inverse,
                                              uber_nodes=uber_nodes,
-                                             maximum_overload_ALS=.4,
-                                             maximum_overload_BLS=.4,
-                                             uber_seconds=12 * 60 * 1000,
+                                             maximum_overload_ALS=.6,
+                                             maximum_overload_BLS=.6,
+                                             uber_seconds=0,
                                              optimization_gap=.05,
                                              max_expected_simultaneous_relocations=8,
                                              force_static=False,
@@ -123,6 +123,6 @@ optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher
 
 simulator: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)
 statistics = simulator.run()
-with open('test04.pickle', 'wb') as f:
+with open('test05.pickle', 'wb') as f:
     pickle.dump(statistics, f)
 print()

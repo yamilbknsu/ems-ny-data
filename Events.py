@@ -42,6 +42,41 @@ class ComputeParemeters(Sim.Event):
         simulator.insert(ComputeParemeters(simulator, simulator.now() + 3600))
 
 
+class FairBalanceEvent(Sim.Event):
+
+    def __init__(self,
+                 entity: object,
+                 time: float,
+                 name: str = None):
+        super().__init__(time, name)
+
+        self.entity = entity
+        self.message: str = 'Reassigning positions according to workload ...'
+
+    def execute(self, simulator):
+        for b in range(1, 6):
+            for s in range(2):
+                vehicles = [(v, v.total_busy_time) for v in simulator.vehicles if v.borough == b and v.type == s]
+                vehicles.sort(key=lambda v: v[1])
+
+                for i in range(int(len(vehicles) / 2)):
+                    aux = vehicles[i][0].station
+                    vehicles[i][0].station = vehicles[-(i + 1)][0].station
+                    if vehicles[i][0].patient is None:
+                        simulator.insert(TripAssignedEvent(simulator, simulator.now(), vehicles[i][0], vehicles[i][0].station))
+                    else:
+                        vehicles[i][0].station_changed = True
+
+                    vehicles[-(i + 1)][0].station = aux
+                    if vehicles[-(i + 1)][0].patient is None:
+                        simulator.insert(TripAssignedEvent(simulator, simulator.now(), vehicles[-(i + 1)][0], vehicles[-(i + 1)][0].station))
+                    else:
+                        vehicles[-(i + 1)][0].station_changed = True
+
+                    if simulator.verbose:
+                        print('{} switching with {}'.format(vehicles[i][0].name, vehicles[-(i + 1)][0].name))
+
+
 class RelocationAndDispatchingEvent(Sim.Event):
 
     def __init__(self,
@@ -298,9 +333,13 @@ class AmbulanceRedeployEvent(Sim.Event):
         # return RelocationAndDispatchingEvent(simulator, simulator.now(), self.vehicle.type, self.vehicle.borough)
 
         if not self.vehicle.isUber:
-            optimal_positions, reposition_dict = simulator.optimizer.redeploy(simulator, simulator.parameters, self.vehicle)
-            self.vehicle.station = reposition_dict[self.vehicle]
-            simulator.insert(TripAssignedEvent(simulator, simulator.now(), self.vehicle, reposition_dict[self.vehicle]))
+            if not self.vehicle.station_changed:
+                optimal_positions, reposition_dict = simulator.optimizer.redeploy(simulator, simulator.parameters, self.vehicle)
+                self.vehicle.station = reposition_dict[self.vehicle]
+                simulator.insert(TripAssignedEvent(simulator, simulator.now(), self.vehicle, reposition_dict[self.vehicle]))
+            else:
+                self.vehicle.station_changed = False
+                return TripAssignedEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.station)
 
 
 class AmbulanceEndCleaningEvent(Sim.Event):

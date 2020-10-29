@@ -373,6 +373,7 @@ class Vehicle(Sim.SimulationEntity):
         self.teleportToNode(start_node)
         self.cleaning: bool = False
         self.leaving: bool = False
+        self.station_changed: bool = False
 
         # The time spent repositioning
         self.can_relocate: bool = True
@@ -561,6 +562,11 @@ class EMSModel(Sim.Simulator):
 
         # Schedule the first compute Q and P event
         self.insert(Events.ComputeParemeters(self, 3600))
+
+        # Schedule  switching events
+        switchingHours = [3, 6, 11, 14, 19, 22]
+        for t in switchingHours:
+            self.insert(Events.FairBalanceEvent(self, t * 3600))
 
         # Initialize model Statistics
         self.statistics: Dict[str, Sim.Statistic] = {}

@@ -10,7 +10,7 @@
             "request": "launch",
             "stopOnEntry": false,
             "pythonPath": "${command:python.interpreterPath}",
-            "program": "Experiment.py",
+            "program": "runExperiments.py",
             "cwd": "${workspaceRoot}",
             "env": {},
             "envFile": "${workspaceRoot}/.env"

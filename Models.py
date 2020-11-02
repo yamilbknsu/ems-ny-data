@@ -81,6 +81,7 @@ class SimulationParameters:
                  travel_distance_penalty: float = 1e-6,
                  target_relocation_time: float = 2160,
                  max_relocation_time: float = 1200,
+                 max_redeployment_time: float = 800,
                  relocation_cooldown: float = 3600,
                  max_expected_simultaneous_relocations: int = 4,
                  maximum_overload_ALS: float = .4,
@@ -217,6 +218,7 @@ class SimulationParameters:
         self.target_relocation_time = target_relocation_time
         self.max_expected_simultaneous_relocations = max_expected_simultaneous_relocations
         self.max_relocation_time = max_relocation_time
+        self.max_redeployment_time = max_redeployment_time
         self.uncovered_penalty = uncovered_penalty
         self.late_response_penalty = late_response_penalty
         self.dispatching_penalty = dispatching_penalty
@@ -396,6 +398,10 @@ class Vehicle(Sim.SimulationEntity):
         self.statistics['ArriveInSystem'].record(arrive_in_system)
         self.statistics['Shift'] = Sim.CounterStatistic('AmbulanceShift{}'.format(self.name))
         self.statistics['Shift'].record(self.shift)
+        self.statistics['Borough'] = Sim.CounterStatistic('AmbulanceBorough{}'.format(self.name))
+        self.statistics['Borough'].record(self.borough)
+        self.statistics['Type'] = Sim.CounterStatistic('AmbulanceType{}'.format(self.name))
+        self.statistics['Type'].record(self.type)
         self.statistics['BusyWorkload'] = Sim.StateStatistic('BusyWorkload{}'.format(self.name))
         self.statistics['AccumulatedWorkload'] = Sim.StateStatistic('AccumulatedWorkload{}'.format(self.name))
 
@@ -413,7 +419,7 @@ class Vehicle(Sim.SimulationEntity):
         self.onArrivalToNode(node)
 
         # Save a record of the trip
-        self.record.append((0, self.pos, node, self.patient,
+        self.record.append((0, self.pos, node, str(self.patient),
                             self.patient.hospital if self.patient is not None else None))
 
     def stopMoving(self):
@@ -564,9 +570,9 @@ class EMSModel(Sim.Simulator):
         self.insert(Events.ComputeParemeters(self, 3600))
 
         # Schedule  switching events
-        switchingHours = [3, 6, 11, 14, 19, 22]
-        for t in switchingHours:
-            self.insert(Events.FairBalanceEvent(self, t * 3600))
+        # switchingHours = [3, 6, 11, 14, 19, 22]
+        # for t in switchingHours:
+        #     self.insert(Events.FairBalanceEvent(self, t * 3600))
 
         # Initialize model Statistics
         self.statistics: Dict[str, Sim.Statistic] = {}

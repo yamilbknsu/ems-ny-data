@@ -9,12 +9,8 @@ from typing import List
 # Internal Imports
 import Models
 import Events
-import OnlineSolvers
+import OnlineSolvers, ROASolver
 import Generators
-
-parser = argparse.ArgumentParser()
-parser.add_argument('-i', type=int, default=0, help='Index of the experiment to run')
-args = parser.parse_args()
 
 # Graph importing
 DATA_DIR = ''
@@ -111,18 +107,20 @@ sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
                                              reachable_demand=reachable_demand,
                                              reachable_inverse=reachable_inverse,
                                              uber_nodes=uber_nodes,
-                                             maximum_overload_ALS=.6,
-                                             maximum_overload_BLS=.6,
+                                             maximum_overload_ALS=.65,
+                                             maximum_overload_BLS=.65,
                                              uber_seconds=0,
                                              optimization_gap=.05,
                                              max_expected_simultaneous_relocations=8,
+                                             dispatching_penalty=1,
                                              force_static=False,
                                              random_seed=0)
 
-optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
+# optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
+optimizer: OnlineSolvers.RelocationModel = ROASolver.ROA()
 
 simulator: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)
 statistics = simulator.run()
-with open('test05.pickle', 'wb') as f:
+with open('test10.pickle', 'wb') as f:
     pickle.dump(statistics, f)
 print()

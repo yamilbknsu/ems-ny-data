@@ -1,7 +1,7 @@
 import time
 import igraph
 import numpy as np
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 # Internal imports
 import Models
@@ -102,35 +102,7 @@ class RelocationAndDispatchingEvent(Sim.Event):
             else:
                 # Manual nearest dispatcher
                 optimal_positions, reposition_dict = [], {}
-                dispatching_dict = {}
-                weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(simulator.timePeriod())
-                vehicles = [[[ambulance for ambulance in simulator.getAvaliableVehicles(v_type=v, borough=b)]
-                            for v in range(simulator.parameters.vehicle_types)]
-                            for b in range(1, 6)]
-
-                vehicle_positions = [[[ambulance.to_node
-                                       for ambulance in v]
-                                      for v in b]
-                                     for b in vehicles]
-
-                used_vehicles: List[Tuple[int, int, int]] = []
-                for e in simulator.getUnassignedEmergencies(1, self.borough):
-
-                    travel_times = np.array(simulator.city_graph.shortest_paths(vehicle_positions[e.borough - 1][0], e.node, weights))
-                    valid_indexes = np.where(travel_times < 8 * 60)[0]
-
-                    if len(valid_indexes) > 0:
-                        candidates = list(zip(valid_indexes, travel_times[valid_indexes].squeeze().reshape(-1)))
-                        candidates.sort(key=lambda c: c[1])
-                    else:
-                        candidates = list(zip(range(travel_times.shape[0]), travel_times.reshape(-1)))
-                        candidates.sort(key=lambda c: c[1])
-
-                    for c in candidates:
-                        if (e.borough, 0, c[0]) not in used_vehicles:
-                            used_vehicles.append((e.borough, 0, c[0]))
-                            dispatching_dict[vehicles[e.borough - 1][0][c[0]]] = e
-                            break
+                dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, severity=self.severity, borough=self.borough)
 
             simulator.ambulance_stations[self.borough][0 if self.severity == 0 else 1] = optimal_positions
 
@@ -333,13 +305,13 @@ class AmbulanceRedeployEvent(Sim.Event):
         # return RelocationAndDispatchingEvent(simulator, simulator.now(), self.vehicle.type, self.vehicle.borough)
 
         if not self.vehicle.isUber:
-            if not self.vehicle.station_changed:
-                optimal_positions, reposition_dict = simulator.optimizer.redeploy(simulator, simulator.parameters, self.vehicle)
-                self.vehicle.station = reposition_dict[self.vehicle]
-                simulator.insert(TripAssignedEvent(simulator, simulator.now(), self.vehicle, reposition_dict[self.vehicle]))
-            else:
-                self.vehicle.station_changed = False
-                return TripAssignedEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.station)
+            # if not self.vehicle.station_changed:
+            optimal_positions, reposition_dict = simulator.optimizer.redeploy(simulator, simulator.parameters, self.vehicle)
+            self.vehicle.station = reposition_dict[self.vehicle]
+            simulator.insert(TripAssignedEvent(simulator, simulator.now(), self.vehicle, reposition_dict[self.vehicle]))
+            # else:
+            #     self.vehicle.station_changed = False
+            #     return TripAssignedEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.station)
 
 
 class AmbulanceEndCleaningEvent(Sim.Event):
@@ -363,7 +335,19 @@ class AmbulanceEndCleaningEvent(Sim.Event):
         if self.vehicle.leaving:
             return AmbulanceLeavingEvent(simulator, simulator.now(), self.vehicle)
 
-        return AmbulanceRedeployEvent(self.entity, simulator.now(), self.vehicle)
+        dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, self.vehicle.type, self.vehicle.borough)
+        if self.vehicle in dispatching_dict.keys():
+            # Mark emergency as assigned
+            dispatching_dict[self.vehicle].markStatus(1)
+            simulator.assignedEmergencies.append(dispatching_dict[self.vehicle])
+
+            # Schedule the assignment event
+            return AssignedEvent(simulator, simulator.now(), self.vehicle, dispatching_dict[self.vehicle])
+
+        if simulator.parameters.force_static:
+            return TripAssignedEvent(simulator, simulator.now(), self.vehicle, self.vehicle.station)
+        else:
+            return AmbulanceRedeployEvent(self.entity, simulator.now(), self.vehicle)
 
 
 class AmbulanceEndTripEvent(Sim.Event):
@@ -509,7 +493,7 @@ class TripAssignedEvent(Sim.Event):
                 simulator.insert(AmbulanceStartMovingEvent(self.vehicle, self.vehicle.expected_arrival, self.vehicle, simulator.city_graph.es[self.vehicle.actual_edge]))
 
             # Save a record of the trip
-            self.vehicle.record.append((simulator.now(), self.vehicle.pos, self.node, self.vehicle.patient,
+            self.vehicle.record.append((simulator.now(), self.vehicle.pos, self.node, str(self.vehicle.patient),
                                         self.vehicle.patient.hospital if self.vehicle.patient is not None else None))
         else:
             return AmbulanceEndTripEvent(self.vehicle, simulator.now(), self.vehicle, valid=False)
@@ -560,7 +544,7 @@ class AssignedEvent(Sim.Event):
             print("WHAAT?")
 
         # Save a record of the trip
-        self.vehicle.record.append((simulator.now(), self.vehicle.pos, self.emergency.node, self.vehicle.patient,
+        self.vehicle.record.append((simulator.now(), self.vehicle.pos, self.emergency.node, str(self.vehicle.patient),
                                     self.vehicle.patient.hospital if self.vehicle.patient is not None else None))
 
 
@@ -664,8 +648,21 @@ class EmergencyArrivalEvent(Sim.Event):
         # Statistics
         simulator.statistics['EmergenciesWaiting'].record(simulator.now(), simulator.assignedNotArrived)
 
-        # Chain an optimization event right next to the arrival
-        return RelocationAndDispatchingEvent(simulator, simulator.now(), 0 if self.emergency.severity == 1 else 1, self.emergency.borough)
+        if simulator.parameters.force_static:
+            dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, 0 if self.severity == 1 else 1, self.emergency.borough)
+
+            # Schedule dispatching
+            for v in dispatching_dict:
+                # Schedule the assignment event
+                simulator.insert(AssignedEvent(simulator, simulator.now(),
+                                               v, dispatching_dict[v]))
+
+                # Mark emergency as assigned
+                dispatching_dict[v].markStatus(1)
+                simulator.assignedEmergencies.append(dispatching_dict[v])
+        else:
+            # Chain an optimization event right next to the arrival
+            return RelocationAndDispatchingEvent(simulator, simulator.now(), 0 if self.emergency.severity == 1 else 1, self.emergency.borough)
 
 
 class AmbulanceLeavingEvent(Sim.Event):
@@ -688,7 +685,7 @@ class AmbulanceLeavingEvent(Sim.Event):
 
     def execute(self, simulator: "Models.EMSModel"):
         self.vehicle.statistics['TimeInSystem'].record(simulator.now() - self.vehicle.arrival_time)
-        self.vehicle.record.append((simulator.now(), self.vehicle.pos, None, self.vehicle.patient,
+        self.vehicle.record.append((simulator.now(), self.vehicle.pos, None, str(self.vehicle.patient),
                                     self.vehicle.patient.hospital if self.vehicle.patient is not None else None))
 
         simulator.vehicles.remove(self.vehicle)
@@ -753,7 +750,8 @@ class AmbulanceArrivalEvent(Sim.Event):
         simulator.statistics[('ALS' if self.vehicle.type == 0 else 'BLS') + 'VehiclesInSystem'].record(simulator.now(), len([v for v in simulator.vehicles if v.type == self.vehicle.type]))
 
         if simulator.now() > 0.1:
-            return RelocationAndDispatchingEvent(simulator, simulator.now(), severity=self.vehicle.type, borough=self.vehicle.borough)
+            return AmbulanceRedeployEvent(simulator, simulator.now(), self.vehicle)
+            # return RelocationAndDispatchingEvent(simulator, simulator.now(), severity=self.vehicle.type, borough=self.vehicle.borough)
 
 
 class HospitalSettingEvent(Sim.Event):

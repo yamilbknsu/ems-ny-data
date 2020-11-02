@@ -10,7 +10,7 @@ from typing import List
 # Internal Imports
 import Models
 import Events
-import OnlineSolvers
+import OnlineSolvers, ROASolver
 import Generators
 
 """
@@ -136,7 +136,7 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
                                                      uber_seconds=experiment['uberHours'] * 3600,
                                                      optimization_gap=experiment['GAP'],
                                                      max_expected_simultaneous_relocations=experiment['relocQty'],
-                                                     force_static=experiment['static'],
+                                                     force_static='Static' in experiment['model'],
                                                      uncovered_penalty=experiment['uncovered'],
                                                      late_response_penalty=experiment['lateResponse'],
                                                      dispatching_penalty=experiment['disaptchingPenalt'],
@@ -144,12 +144,15 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
                                                      target_relocation_time=experiment['targetReloc'],
                                                      relocation_cooldown=experiment['relocCooldown'],
                                                      max_relocation_time=experiment['maxReloc'],
+                                                     max_redeployment_time=experiment['maxRedeployment'],
                                                      random_seed=0)
         # ambulance_distribution=[[0, 70, 74, 89, 65, 14],
         #                        [0, 114, 126, 140, 105, 20]]
 
-        if experiment['model'] == 'SBRDA':
-            optimizer = OnlineSolvers.UberRelocatorDispatcher()
+        if 'SBRDA' in experiment['model']:
+            optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
+        else:
+            optimizer = ROASolver.ROA()
 
         simulator: Models.EMSModel = Models.EMSModel(graph, generator, parameters=sim_parameters, optimizer=optimizer, verbose=True)
         statistics = simulator.run()

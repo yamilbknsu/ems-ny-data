@@ -3,30 +3,31 @@ import pickle
 
 # Testing sets
 days = ['friday']
-model = ['SBRDA']
-dataReplica = list(range(2))
+model = ['SBRDA', 'SBRDAStatic', 'ROA']
+dataReplica = list(range(10))
 simTime = [24 * 3600]
-static = [False]
-uberHours = [6000 / 60, 0]
-ambulanceDistribution = [[355, 802], [319, 722], [284, 642]]
+uberHours = [0]
+ambulanceDistribution = [[355, 802]]  # , [319, 722], [284, 642]]
 workloadRestriction = [True]
-workloadLimit = [.65, .5]
-simultaneous_relocations = [4, 6, 8, 10]
+workloadLimit = [.65, .7]
+simultaneous_relocations = [8]
 uncovered_penalty = [10 * 24 * 3600]
 late_response_penalty = [60]
-dispatching_penalty = [.01]
+dispatching_penalty = [1]
 travel_distance_penalty = [1e-6]
 target_relocTime = [2160]
-max_relocation_time = [2400]
+max_relocation_time = [1200]
+max_redeployment_time = [800, 600]
 relocation_cooldown = [3600]
 GAP = [.05]
 
-EXPERIMENTS = [{'day': day, 'model': m, 'dataReplica': rep, 'simTime': time, 'static': rel, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'GAP': gap,
+EXPERIMENTS = [{'day': day, 'model': m, 'dataReplica': rep, 'simTime': time, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'GAP': gap,
                 'parameters_dir': 'HRDemand', 'uberHours': uH, 'relocQty': relocQty, 'uncovered': unc, 'lateResponse': lr, 'disaptchingPenalt': disp, 'ttPenalty': ttp, 'targetReloc': targetReloc,
-                'maxReloc': maxreloc, 'relocCooldown': relocCooldown}
+                'maxReloc': maxreloc, 'relocCooldown': relocCooldown, 'maxRedeployment': maxRed}
                for day in days for m in model for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction
-               for rep in dataReplica for time in simTime for rel in static for uH in uberHours for relocQty in simultaneous_relocations for unc in uncovered_penalty for lr in late_response_penalty
-               for disp in dispatching_penalty for ttp in travel_distance_penalty for targetReloc in target_relocTime for maxreloc in max_relocation_time for relocCooldown in relocation_cooldown]
+               for rep in dataReplica for time in simTime for uH in uberHours for relocQty in simultaneous_relocations for unc in uncovered_penalty for lr in late_response_penalty
+               for disp in dispatching_penalty for ttp in travel_distance_penalty for targetReloc in target_relocTime for maxreloc in max_relocation_time for relocCooldown in relocation_cooldown
+               for maxRed in max_redeployment_time]
 
 output = []
 
@@ -35,7 +36,6 @@ for experiment in EXPERIMENTS:
     name = '{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(experiment['day'],
                                                                           experiment['model'],
                                                                           experiment['dataReplica'],
-                                                                          'Static' if experiment['static'] else 'Online',
                                                                           experiment['workload_limit'],
                                                                           experiment['GAP'],
                                                                           experiment['parameters_dir'],
@@ -49,6 +49,7 @@ for experiment in EXPERIMENTS:
                                                                           experiment['ttPenalty'],
                                                                           experiment['targetReloc'],
                                                                           experiment['maxReloc'],
+                                                                          experiment['maxRedeployment'],
                                                                           experiment['relocCooldown'])
     output.append([name, experiment])
 

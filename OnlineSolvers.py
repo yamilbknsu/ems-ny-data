@@ -29,6 +29,13 @@ class RelocationModel:
                  vehicle: "Models.Vehicle"):
         return [], {}
 
+    def dispatch(self,
+                 simulator: "Models.EMSModel",
+                 params: "Models.SimulationParameters",
+                 severity: int = 0,
+                 borough=None):
+        return {}
+
 
 class UberRelocatorDispatcher(RelocationModel):
 
@@ -71,7 +78,7 @@ class UberRelocatorDispatcher(RelocationModel):
             late_response_penalty = params.late_response_penalty
             dispatching_penalty = params.dispatching_penalty
             RHS_limit = max(params.uber_seconds * simulator.now() / params.simulation_time, simulator.uber_seconds)
-            inf_travel_time = np.sum(cand_demand_travel[t])
+            inf_travel_time = np.max(cand_demand_travel[t])
 
         # Sets
         C = params.candidates_borough[borough]
@@ -323,10 +330,8 @@ class UberRelocatorDispatcher(RelocationModel):
                 final_positions.append(C[j])
         reposition_matrix = [[r[u][C.index(j)].x for j in final_positions] for u in range(len(U_nodes))]
         for i, node in enumerate(U_nodes):
-            if 1 in reposition_matrix[i] and final_positions[reposition_matrix[i].index(1)] != Vehicles[i].station:
+            if 1 in reposition_matrix[i] and final_positions[reposition_matrix[i].index(1)] != U[node].station:
                 final_repositioning[U[node]] = final_positions[reposition_matrix[i].index(1)]
-            else:
-                final_positions.append(node)
 
         for e, emergency in enumerate(E):
             dispatch_list = [k[u][e].x for u, u_node in enumerate(U_nodes)]
@@ -359,8 +364,11 @@ class UberRelocatorDispatcher(RelocationModel):
         # Parameters
         t = simulator.timePeriod()
         D_rates = params.demand_rates
+        C = params.candidates_borough[borough]
         reachable_inverse = params.reachable_inverse[t]
         cand_demand_travel = params.cand_demand_time[t]
+        weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(t)
+        travel_times_UC = np.array(simulator.city_graph.shortest_paths(vehicle.to_node, C, weights)).reshape(-1)
 
         if severity == 1:
             inf_travel_time = np.sum(cand_demand_travel[t])
@@ -455,6 +463,13 @@ class UberRelocatorDispatcher(RelocationModel):
                             name='Const_3_{}'.format(j))
             for j, c_node in enumerate(C)}
 
+        # Constraint 7
+        # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
+        {model.addConstr(lhs=grb.LinExpr(travel_times_UC, r),
+                         sense=grb.GRB.LESS_EQUAL,
+                         rhs=params.max_redeployment_time,
+                         name='Const_7')}
+
         model.addConstr(lhs=grb.quicksum(r),
                         sense=grb.GRB.EQUAL,
                         rhs=1,
@@ -475,3 +490,162 @@ class UberRelocatorDispatcher(RelocationModel):
         final_repositioning[vehicle] = final_positions[([r[C.index(j)].x for j in final_positions]).index(1)]
 
         return final_positions, final_repositioning
+
+    def dispatch(self,
+                 simulator: "Models.EMSModel",
+                 params: "Models.SimulationParameters",
+                 severity: int = 0,
+                 borough=None):
+
+        if severity == 0:
+            # Manual nearest dispatcher
+            dispatching_dict = {}
+            weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(simulator.timePeriod())
+            vehicles = simulator.getAvaliableVehicles(v_type=severity, borough=borough)
+
+            vehicle_positions = [ambulance.to_node
+                                 for ambulance in vehicles]
+
+            used_vehicles: List[Tuple[int, int, int]] = []
+            emergencies = simulator.getUnassignedEmergencies(severity + 1, borough)
+            emergencies.sort(key=lambda e: e.arrival_time)
+
+            for e in emergencies:
+
+                travel_times = np.array(simulator.city_graph.shortest_paths(vehicle_positions, e.node, weights))
+                valid_indexes = np.where(travel_times < 8 * 60)[0]
+
+                if len(valid_indexes) > 0:
+                    candidates = list(zip(valid_indexes, travel_times[valid_indexes].squeeze().reshape(-1)))
+                    candidates.sort(key=lambda c: c[1])
+                else:
+                    candidates = list(zip(range(travel_times.shape[0]), travel_times.reshape(-1)))
+                    candidates.sort(key=lambda c: c[1])
+
+                for c in candidates:
+                    if (e.borough, 0, c[0]) not in used_vehicles:
+                        used_vehicles.append((e.borough, 0, c[0]))
+                        dispatching_dict[vehicles[c[0]]] = e
+                        break
+            return dispatching_dict
+        else:
+            # Initialize dispatching dict
+            final_dispatching: Dict["Models.Vehicle", "Models.Emergency"] = {}
+
+            # Parameters
+            t = simulator.timePeriod()
+
+            average_RHS = 15 * 60
+            uncovered_penalty = params.uncovered_penalty
+            late_response_penalty = params.late_response_penalty
+            dispatching_penalty = params.dispatching_penalty
+            RHS_limit = max(params.uber_seconds * simulator.now() / params.simulation_time, simulator.uber_seconds)
+
+            # Sets
+            E = simulator.getUnassignedEmergencies(severity + 1, borough)
+            if severity == 1:
+                E += simulator.getUnassignedEmergencies(3, borough)
+            E_pos = [emergency.node for emergency in E]
+            Vehicles = simulator.getAvaliableVehicles(severity, borough)
+            U = {v.pos: v for v in Vehicles}
+            U_nodes = list(U.keys())
+            U_to_nodes = [v.to_node for v in Vehicles]
+
+            # First stage
+            print('DISPATCHING {} FOR BOROUGH {}'.format("ALS" if severity == 0 else "BLS", borough))
+            start_time = time.time()
+
+            # Create the mip solver with the CBC backend.
+            model = grb.Model(name="ALS" if severity == 0 else "BLS")
+
+            # Declare model variables
+            # k_ue: if ambulance at u is dispatched to emergency e
+            k = [[model.addVar(vtype=grb.GRB.BINARY, name='delta_' + u + '_' + e) for e in E_pos] for u in U_nodes]
+            # m_u: if ambulance at u stays in place
+            m = [model.addVar(vtype=grb.GRB.BINARY, name='m' + u_node) for u, u_node in enumerate(U_nodes)]
+
+            if severity == 1:
+                # z_e: if RHS is dispatched to emergency e
+                z = [model.addVar(vtype=grb.GRB.BINARY, name='z_' + e_node) for e, e_node in enumerate(E_pos)]
+                # b_e: if emergency e is left uncovered
+                b = [model.addVar(vtype=grb.GRB.BINARY, name='b_' + e_node) for e, e_node in enumerate(E_pos)]
+                # w_e: late response emergency e
+                w = [model.addVar(vtype=grb.GRB.CONTINUOUS, name='w_' + e_node, lb=0) for e, e_node in enumerate(E_pos)]
+
+            # Coefficients
+            # ------------
+            # Computing alpha value (The amount of time an ambulance can spend relocating)
+            weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(t)
+            travel_times_CE = np.array([np.squeeze(simulator.city_graph.shortest_paths(U_to_nodes, e, weights)).reshape(len(U_to_nodes), ) for e in E_pos]).T
+
+            b_bar = np.mean([U[u_node].total_busy_time for u_node in U_nodes]) if len(U) > 0 else 1e10
+            rho = [[U[u_node].total_busy_time + travel_times_CE[u][e] + params.mean_busytime[severity].at[t + 1, params.graph_to_demand[e_node]] - b_bar for e, e_node in enumerate(E_pos)] for u, u_node in enumerate(U_nodes)]
+
+            # Objective function
+            model.setObjective(grb.quicksum(uncovered_penalty * b[e] + late_response_penalty * w[e] + dispatching_penalty * grb.quicksum(rho[u][e] * k[u][e] for u, u_node in enumerate(U_nodes)) for e, e_node in enumerate(E_pos)))     # noqa: W503
+            model.ModelSense = grb.GRB.MINIMIZE
+
+            # Constraints
+            # ------------
+            # Constraint 4
+            # sum_{j} r_uj + sum_{e} delta_ue = 1
+            {u: model.addConstr(lhs=grb.quicksum(k[u]) + m[u],
+                                sense=grb.GRB.EQUAL,
+                                rhs=1,
+                                name='Const_4_{}'.format(u_node))
+             for u, u_node in enumerate(U_nodes)}
+
+            # Constraint 9
+            # \sum_{u} k_ue + b_e = 1
+            {e: model.addConstr(lhs=grb.quicksum(k[u][e] for u, u_node in enumerate(U_nodes)) + b[e],
+                                sense=grb.GRB.EQUAL,
+                                rhs=1,
+                                name='Const_9_{}'.format(e))
+             for e, emergency in enumerate(E) if emergency.severity == 2}
+
+            # Constraint 9.5
+            {e: model.addConstr(lhs=z[e],
+                                sense=grb.GRB.EQUAL,
+                                rhs=0,
+                                name='Const_9.5_{}'.format(e))
+             for e, emergency in enumerate(E) if emergency.severity == 2}
+
+            # Constraint 10
+            # \sum_{u} k_ue + b_e + z_e= 1
+            {e: model.addConstr(lhs=grb.quicksum(k[u][e] for u, u_node in enumerate(U_nodes)) + b[e] + z[e],
+                                sense=grb.GRB.EQUAL,
+                                rhs=1,
+                                name='Const_9_{}'.format(e))
+             for e, emergency in enumerate(E) if emergency.severity == 3}
+
+            # Contraint 11
+            model.addConstr(lhs=simulator.uber_seconds + grb.LinExpr([average_RHS] * len(z), z),
+                            sense=grb.GRB.LESS_EQUAL,
+                            rhs=RHS_limit,
+                            name='RHSConstraint')
+
+            # Constraint 12
+            {e: model.addConstr(lhs=simulator.now() - emergency.arrival_time + grb.quicksum(travel_times_CE[u][e] * k[u][e] for u, u_node in enumerate(U_nodes)),
+                                sense=grb.GRB.LESS_EQUAL,
+                                rhs=w[e] + 8 * 60 + np.sum(params.cand_cand_time[t]) * b[e],
+                                name='Const_12_{}'.format(e))
+             for e, emergency in enumerate(E)}
+
+            model.setParam('MIPGap', params.optimization_gap)
+            model.setParam('LogToConsole', 1 if simulator.verbose else 0)
+
+            print(time.time() - start_time, '- Solving the model...')
+            model.optimize()
+
+            print(time.time() - start_time, '- Done!')
+            simulator.statistics['OptimizationSize{}{}'.format('ALS' if severity == 0 else 'BLS', borough)].record(simulator.now(), len(U))
+            simulator.statistics['OptimizationTime{}{}'.format('ALS' if severity == 0 else 'BLS', borough)].record(simulator.now(), time.time() - start_time)
+
+            for e, emergency in enumerate(E):
+                dispatch_list = [k[u][e].x for u, u_node in enumerate(U_nodes)]
+                if 1 in dispatch_list:
+                    final_dispatching[U[U_nodes[dispatch_list.index(1)]]] = emergency
+                elif z[e].x == 1:
+                    final_dispatching[simulator.newUberVehicle(simulator.parameters.uber_nodes[emergency.node], emergency.borough)] = emergency
+
+            return final_dispatching

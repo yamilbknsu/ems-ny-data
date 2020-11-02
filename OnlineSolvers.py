@@ -467,7 +467,7 @@ class UberRelocatorDispatcher(RelocationModel):
         # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
         {model.addConstr(lhs=grb.LinExpr(travel_times_UC, r),
                          sense=grb.GRB.LESS_EQUAL,
-                         rhs=params.max_redeployment_time,
+                         rhs=max(min(travel_times_UC), params.max_redeployment_time),
                          name='Const_7')}
 
         model.addConstr(lhs=grb.quicksum(r),

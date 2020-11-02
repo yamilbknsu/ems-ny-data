@@ -130,7 +130,7 @@ class ROA(OnlineSolvers.RelocationModel):
         Z_actual = np.sum([D_rates[severity].loc[t + 1, node] if sum(1 if u in reachable_inverse[node] else 0 for u in U_stations) else 0 for i, node in enumerate(D)])
         Z = np.sum(D_rates[severity].loc[t + 1, D].values * np.array([y[i].x for i in range(len(D))]))
 
-        if (Z - Z_actual) / Z_actual or initial:
+        if Z_actual > 0 and (Z - Z_actual) / Z_actual >= .15 or initial:
             # Create the mip solver with the CBC backend.
             model = grb.Model(name="ALS" if severity == 0 else "BLS")
 
@@ -282,7 +282,7 @@ class ROA(OnlineSolvers.RelocationModel):
         # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
         model.addConstr(lhs=grb.LinExpr(travel_times_UC, r),
                         sense=grb.GRB.LESS_EQUAL,
-                        rhs=params.max_redeployment_time,
+                        rhs=max(min(travel_times_UC), params.max_redeployment_time),
                         name='Const_7')
 
         model.addConstr(lhs=grb.quicksum(r),

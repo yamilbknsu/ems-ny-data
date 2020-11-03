@@ -90,7 +90,7 @@ class UberRelocatorDispatcher(RelocationModel):
         Vehicles = simulator.getAvaliableVehicles(severity, borough)
         U = {v.pos: v for v in Vehicles}
         U_nodes = list(U.keys())
-        U_to_nodes = [v.to_node for v in Vehicles]
+        U_to_nodes = [U[u_node].to_node for u_node in U_nodes]
 
         max_overload = params.maximum_overload_ALS if severity == 0 else params.maximum_overload_BLS
         target_relocation = params.target_relocation_time
@@ -549,7 +549,7 @@ class UberRelocatorDispatcher(RelocationModel):
             Vehicles = simulator.getAvaliableVehicles(severity, borough)
             U = {v.pos: v for v in Vehicles}
             U_nodes = list(U.keys())
-            U_to_nodes = [v.to_node for v in Vehicles]
+            U_to_nodes = [U[u_node].to_node for u_node in U_nodes]
 
             # First stage
             print('DISPATCHING {} FOR BOROUGH {}'.format("ALS" if severity == 0 else "BLS", borough))

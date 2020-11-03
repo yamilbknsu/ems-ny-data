@@ -48,8 +48,8 @@ class ROA(OnlineSolvers.RelocationModel):
         Vehicles = simulator.getAvaliableVehicles(severity, borough)
         U = {v.pos: v for v in Vehicles if v not in final_dispatching.keys()}
         U_nodes = list(U.keys())
-        U_to_nodes = [v.to_node for v in Vehicles if v not in final_dispatching.keys()]
-        U_stations = [v.station for v in Vehicles if v not in final_dispatching.keys()]
+        U_to_nodes = [U[u_node].to_node for u_node in U_nodes if U[u_node] not in final_dispatching.keys()]
+        U_stations = [U[u_node].station for u_node in U_nodes if U[u_node] not in final_dispatching.keys()]
 
         max_overload = params.maximum_overload_ALS if severity == 0 else params.maximum_overload_BLS
 
@@ -72,9 +72,9 @@ class ROA(OnlineSolvers.RelocationModel):
         # ------------
         # Computing alpha value (The amount of time an ambulance can spend relocating)
         if not initial:
-            alpha = [max(U[v].total_busy_time, max_overload * (simulator.now() - U[v].arrive_in_system)) for v in U]
             weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(t)
             travel_times_UC = np.array(simulator.city_graph.shortest_paths(U_to_nodes, C, weights))
+            alpha = [max(U[v].total_busy_time + min(travel_times_UC[u]), max_overload * (simulator.now() - U[v].arrive_in_system)) for u, v in enumerate(U)]
         else:
             alpha = [24 * 3600 for v in Vehicles]  # Set it to the possible maximum value so the restriction is relaxed
             travel_times_UC = np.zeros((len(U_to_nodes), len(C)))

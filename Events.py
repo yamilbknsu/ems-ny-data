@@ -192,7 +192,7 @@ class EmergencyLeaveSystemEvent(Sim.Event):
         simulator.time_records[(simulator.timePeriod() + 1, severity, self.emergency.node)].append(simulator.now() - self.emergency.vehicle_assigned_time)
 
         simulator.emergencyRecord.append((self.emergency.name, self.emergency.node, self.emergency.severity, self.emergency.arrival_time,
-                                         self.emergency.start_attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital, (self.vehicle is not None and self.vehicle.isUber)))
+                                         self.emergency.start_attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital, (self.vehicle is not None and self.vehicle.isUber), self.vehicle.name))
 
         simulator.activeEmergencies.remove(self.emergency)
         if self.emergency in simulator.assignedEmergencies:
@@ -246,7 +246,7 @@ class AmbulanceFinishAttendingEvent(Sim.Event):
             valid_hospitals = simulator.parameters.nodes_with_borough[simulator.parameters.nodes_with_borough['osmid'].isin(simulator.hospitals[1]) &
                                                                       (simulator.parameters.nodes_with_borough['boro_code'] == self.vehicle.borough)]['osmid'].values.tolist()
             distances = simulator.getShortestDistances(self.emergency.node, valid_hospitals)[0]
-            nearest_node = simulator.hospitals[hospital_type][np.argmin(distances)]
+            nearest_node = valid_hospitals[np.argmin(distances)]
 
             self.emergency.to_hospital_time = simulator.now()
             self.emergency.markStatus(3)

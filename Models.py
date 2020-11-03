@@ -637,7 +637,7 @@ class EMSModel(Sim.Simulator):
         self.statistics['EmergenciesWaiting'] = Sim.StateStatistic('EmergenciesWaiting')
 
         # Tuples of the form
-        # (emergency name, node, severity, arrival time, attending time, to_hospital_time, disposition code, hospital)
+        # (emergency name, node, severity, arrival time, attending time, to_hospital_time, disposition code, hospital, vehicle)
         self.emergencyRecord: List[Tuple] = []
 
     def run(self,

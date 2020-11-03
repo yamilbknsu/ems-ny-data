@@ -20,7 +20,7 @@ General TODO for the project
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', type=int, default=84, help='Index of the experiment to run')
+parser.add_argument('-i', type=int, default=1, help='Index of the experiment to run')
 parser.add_argument('-n', type=int, default=1, help='Number of replicas per task')
 args = parser.parse_args()
 

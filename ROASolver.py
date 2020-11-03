@@ -62,9 +62,9 @@ class ROA(OnlineSolvers.RelocationModel):
 
         # Declare model variables
         # x_ji: if node i is covered by node j
-        y = [model.addVar(vtype=grb.GRB.BINARY, name='x_' + node) for node in D]
+        y = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node) for node in D]
         # y_j: if ambulance is located at j at the end
-        x = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node) for j, node in enumerate(C)]
+        x = [model.addVar(vtype=grb.GRB.BINARY, name='x_' + node) for j, node in enumerate(C)]
         # r_uj: if ambulance moves from u to j
         r = [[model.addVar(vtype=grb.GRB.BINARY, name='r_' + u + '_' + k) for k in C] for u in U_nodes]
 
@@ -181,9 +181,9 @@ class ROA(OnlineSolvers.RelocationModel):
                                 name='Const_6_{}'.format(u))
              for u, u_node in enumerate(U_nodes)}
 
-            model.addConstr(lhs=grb.LinExpr(D_rates[severity].loc[t + 1, D].values.tolist(), y),
-                            sense=grb.GRB.EQUAL,
-                            rhs=Z,
+            model.addConstr(lhs=Z,
+                            sense=grb.GRB.LESS_EQUAL,
+                            rhs=grb.LinExpr(D_rates[severity].loc[t + 1, D].values.tolist(), y),
                             name='Const_5')
 
             model.setParam('MIPGap', params.optimization_gap)

@@ -99,7 +99,7 @@ class ROA(OnlineSolvers.RelocationModel):
                             name='Const_2_{}'.format(i))
          for i, d_node in enumerate(D)}
 
-        {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C) if travel_times_UC[U_nodes.index(u_node), C.index(k_node)] <= params.max_relocation_time),
+        {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
                             sense=grb.GRB.EQUAL,
                             rhs=1,
                             name='Const_3_{}'.format(u))
@@ -162,7 +162,7 @@ class ROA(OnlineSolvers.RelocationModel):
                                 name='Const_2_{}'.format(i))
              for i, d_node in enumerate(D)}
 
-            {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C) if travel_times_UC[U_nodes.index(u_node), C.index(k_node)] <= params.max_relocation_time),
+            {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
                                 sense=grb.GRB.EQUAL,
                                 rhs=1,
                                 name='Const_3_{}'.format(u))
@@ -247,9 +247,9 @@ class ROA(OnlineSolvers.RelocationModel):
 
         # Declare model variables
         # x_ji: if node i is covered by node j
-        y = [model.addVar(vtype=grb.GRB.BINARY, name='x_' + node) for node in D]
+        y = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node) for node in D]
         # y_j: if ambulance is located at j at the end
-        x = [model.addVar(vtype=grb.GRB.BINARY, name='y_' + node) for j, node in enumerate(C)]
+        x = [model.addVar(vtype=grb.GRB.BINARY, name='x_' + node) for j, node in enumerate(C)]
         # r_uj: if ambulance moves from u to j
         r = [model.addVar(vtype=grb.GRB.BINARY, name='r_' + k) for k in C]
 
@@ -282,7 +282,7 @@ class ROA(OnlineSolvers.RelocationModel):
         # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
         model.addConstr(lhs=grb.LinExpr(travel_times_UC, r),
                         sense=grb.GRB.LESS_EQUAL,
-                        rhs=max(min(travel_times_UC), params.max_redeployment_time),
+                        rhs=max(min([travel_times_UC[t] for t in range(len(travel_times_UC)) if C[t] not in U_nodes]), params.max_redeployment_time),
                         name='Const_7')
 
         model.addConstr(lhs=grb.quicksum(r),

@@ -243,7 +243,9 @@ class AmbulanceFinishAttendingEvent(Sim.Event):
             return EmergencyLeaveSystemEvent(simulator, simulator.now(), self.emergency, True, self.vehicle)
         else:
             # Get nearest hospital of the corresponding type
-            distances = simulator.getShortestDistances(self.emergency.node, simulator.hospitals[hospital_type])[0]
+            valid_hospitals = simulator.parameters.nodes_with_borough[simulator.parameters.nodes_with_borough['osmid'].isin(simulator.hospitals[1]) &
+                                                                      (simulator.parameters.nodes_with_borough['boro_code'] == self.vehicle.borough)]['osmid'].values.tolist()
+            distances = simulator.getShortestDistances(self.emergency.node, valid_hospitals)[0]
             nearest_node = simulator.hospitals[hospital_type][np.argmin(distances)]
 
             self.emergency.to_hospital_time = simulator.now()

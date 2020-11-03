@@ -192,7 +192,7 @@ class EmergencyLeaveSystemEvent(Sim.Event):
         simulator.time_records[(simulator.timePeriod() + 1, severity, self.emergency.node)].append(simulator.now() - self.emergency.vehicle_assigned_time)
 
         simulator.emergencyRecord.append((self.emergency.name, self.emergency.node, self.emergency.severity, self.emergency.arrival_time,
-                                         self.emergency.start_attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital, (self.vehicle is not None and self.vehicle.isUber), self.vehicle.name))
+                                         self.emergency.start_attending_time, self.emergency.to_hospital_time, self.emergency.disposition_code, self.emergency.hospital, (self.vehicle is not None and self.vehicle.isUber), (self.vehicle.name if self.vehicle is not None else None)))
 
         simulator.activeEmergencies.remove(self.emergency)
         if self.emergency in simulator.assignedEmergencies:
@@ -646,6 +646,10 @@ class EmergencyArrivalEvent(Sim.Event):
 
         self.emergency.assignBorough(simulator)
 
+        if self.emergency.borough != 1:
+            simulator.activeEmergencies.remove(self.emergency)
+            return
+
         simulator.assignedNotArrived += 1
         # Statistics
         simulator.statistics['EmergenciesWaiting'].record(simulator.now(), simulator.assignedNotArrived)
@@ -790,3 +794,8 @@ class EndSimulationEvent(Sim.Event):
     def execute(self, simulator: "Models.EMSModel"):
         simulator.statistics['RunTime'].record(time.time() - simulator.sim_start_time)
         simulator.events.empty()
+
+        while len(simulator.vehicles) > 0:
+            v = simulator.vehicles[0]
+            E = AmbulanceLeavingEvent(simulator, simulator.now(), v)
+            E.execute(simulator)

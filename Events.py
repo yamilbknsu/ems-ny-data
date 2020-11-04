@@ -371,7 +371,7 @@ class AmbulanceEndTripEvent(Sim.Event):
         status = self.vehicle.onPathEnded()
         self.vehicle.relocating = False
 
-        if self.valid:
+        if self.valid or self.vehicle.patient is not None:
             if status == 0:
                 self.vehicle.statistics['State'].record(simulator.now(), 0)
 

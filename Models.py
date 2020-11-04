@@ -683,7 +683,7 @@ class EMSModel(Sim.Simulator):
                     arrival_time = cumu_shifts[t] * 3600 + np.random.random() * parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation / 2
                     hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
                     self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,
-                                Vehicle(hospital_node, v, arrive_in_system=np.clip(arrival_time, 0, np.inf), borough=b, shift=(t / 8) + 1, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))
+                                Vehicle(hospital_node, v, arrive_in_system=np.clip(arrival_time, 0, np.inf), borough=b, shift=t + 2, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))
                     self.n_vehicles += 1
                     i += 1
 

@@ -145,12 +145,14 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
                                                      relocation_cooldown=experiment['relocCooldown'],
                                                      max_relocation_time=experiment['maxReloc'],
                                                      max_redeployment_time=experiment['maxRedeployment'],
-                                                     random_seed=0)
+                                                     random_seed=experiment['dataReplica'])
         # ambulance_distribution=[[0, 70, 74, 89, 65, 14],
         #                        [0, 114, 126, 140, 105, 20]]
 
         if 'SBRDA' in experiment['model']:
             optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
+        elif 'SBRDANew' in experiment['model']:
+            optimizer = OnlineSolvers.AlternativeUberRelocatorDispatcher()
         else:
             optimizer = ROASolver.ROA()
 

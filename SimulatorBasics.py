@@ -451,7 +451,10 @@ class StateStatistic(Statistic):
     def sum(self):
         return sum(d[1] for d in self.data)
 
-    def visualize(self, show_mean = True):
+    def visualize(self, show_mean = True, figsize=None):
+        if figsize is not None:
+            fig, ax = plt.subplots(1,1, figsize=figsize)
+
         x = []
         y = []
         for i in range(len(self.data) - 1):

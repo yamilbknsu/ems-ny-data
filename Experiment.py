@@ -29,9 +29,9 @@ speeds = speeds.drop('Unnamed: 0', axis=1)
 speeds.index = speeds['edgeid']
 speeds = speeds.loc[graph.es['edgeid'], :]
 
-experiment = {'day': 'friday', 'dataReplica': 0, 'simTime': 24 * 3600, 'relocatorModel': 'survivalNoExp', 'dispatcher': 'preparedness',
+experiment = {'day': 'monday', 'dataReplica': 0, 'simTime': 24 * 3600, 'relocatorModel': 'survivalNoExp', 'dispatcher': 'preparedness',
               'relocate': False, 'ambulance_distribution': [355, 802], 'workload_restriction': True, 'workload_limit': .4, 'useUber': True, 'GAP': 0.05,
-              'parameters_dir': 'HRDemand', 'relocation_period': 600, 'uberRatio': 1}
+              'parameters_dir': 'Base', 'relocation_period': 600, 'uberRatio': 1}
 
 with open(DATA_DIR + 'Preprocessing Values//{}//candidate_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
     candidate_nodes = pickle.load(file)
@@ -113,14 +113,17 @@ sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
                                              optimization_gap=.05,
                                              max_expected_simultaneous_relocations=8,
                                              dispatching_penalty=1,
-                                             force_static=True,
+                                             max_relocation_time=800,
+                                             max_redeployment_time=800,
+                                             force_static=False,
                                              random_seed=0)
 
-optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
+# optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
 # optimizer: OnlineSolvers.RelocationModel = ROASolver.ROA()
+optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocatorDispatcher()
 
 simulator: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)
 statistics = simulator.run()
-with open('test11.pickle', 'wb') as f:
+with open('test1.pickle', 'wb') as f:
     pickle.dump(statistics, f)
 print()

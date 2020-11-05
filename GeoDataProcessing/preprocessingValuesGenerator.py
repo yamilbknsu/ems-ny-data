@@ -309,13 +309,13 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
 
 if __name__ == "__main__":
     # Load the original candidates and nodes
-    original_candidates = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/EMScandidatesMixedLR.geojson')
+    original_candidates = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/EMScandidatesMixedLRNew.geojson')
 
     # Load the nodes of the graph with borough
     graph_nodes = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
 
     # Load the uniform demand points
-    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform600m/Uniform600mDemand.geojson')
+    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform600m/Uniform600mDemandNew.geojson')
 
     # Load the hospital points
     hospital_df = gpd.read_file(DATA_DIR + 'Generated Shapefiles/NYC_Hospitals/NYC_Hospitals.geojson')
@@ -332,4 +332,4 @@ if __name__ == "__main__":
     speeds.index = speeds['edgeid']
     speeds = speeds.loc[city_graph.es['edgeid'], :]
 
-    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//Preprocessing Values//HRDemand//')
+    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//Preprocessing Values//Base//')

@@ -238,7 +238,10 @@ class AmbulanceFinishAttendingEvent(Sim.Event):
         if hospital_type == 0:
             # Mark ambulance as cleaning and schedule finish cleaning event
             self.vehicle.cleaning = True
+            self.vehicle.total_busy_time += 10 * 60
             simulator.insert(AmbulanceEndCleaningEvent(simulator, simulator.now() + 10 * 60, self.vehicle))
+            self.vehicle.statistics['BusyWorkload'].record(simulator.now(), self.vehicle.total_busy_time)
+            self.vehicle.statistics['AccumulatedWorkload'].record(simulator.now(), self.vehicle.accumulated_relocation)
 
             return EmergencyLeaveSystemEvent(simulator, simulator.now(), self.emergency, True, self.vehicle)
         else:
@@ -544,6 +547,8 @@ class AssignedEvent(Sim.Event):
 
         if self.emergency is None or self.emergency.node is None:
             print("WHAAT?")
+        if self.emergency.name == 'Emergency 58':
+            print()
 
         # Save a record of the trip
         self.vehicle.record.append((simulator.now(), self.vehicle.pos, self.emergency.node, str(self.vehicle.patient),
@@ -646,8 +651,8 @@ class EmergencyArrivalEvent(Sim.Event):
 
         self.emergency.assignBorough(simulator)
 
-        #if self.emergency.borough != 1:
-        #     simulator.activeEmergencies.remove(self.emergency)
+        #if self.emergency.borough != 4:
+        #    simulator.activeEmergencies.remove(self.emergency)
         #    return
 
         simulator.assignedNotArrived += 1

@@ -3,7 +3,7 @@ import pickle
 
 # Testing sets
 days = ['friday']
-model = ['SBRDA', 'SBRDAStatic', 'ROA']
+model = ['SBRDANew', 'SBRDAStatic', 'ROA']
 dataReplica = list(range(10))
 simTime = [24 * 3600]
 uberHours = [0]
@@ -22,7 +22,7 @@ relocation_cooldown = [3600]
 GAP = [.05]
 
 EXPERIMENTS = [{'day': day, 'model': m, 'dataReplica': rep, 'simTime': time, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'GAP': gap,
-                'parameters_dir': 'HRDemand', 'uberHours': uH, 'relocQty': relocQty, 'uncovered': unc, 'lateResponse': lr, 'disaptchingPenalt': disp, 'ttPenalty': ttp, 'targetReloc': targetReloc,
+                'parameters_dir': 'Base', 'uberHours': uH, 'relocQty': relocQty, 'uncovered': unc, 'lateResponse': lr, 'disaptchingPenalt': disp, 'ttPenalty': ttp, 'targetReloc': targetReloc,
                 'maxReloc': maxreloc, 'relocCooldown': relocCooldown, 'maxRedeployment': maxRed}
                for day in days for m in model for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction
                for rep in dataReplica for time in simTime for uH in uberHours for relocQty in simultaneous_relocations for unc in uncovered_penalty for lr in late_response_penalty

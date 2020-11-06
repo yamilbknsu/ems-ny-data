@@ -611,9 +611,11 @@ class AmbulanceStartMovingEvent(Sim.Event):
 
             self.vehicle.statistics['RelocationTime'].record(simulator.now(), self.vehicle.reposition_workload)
             self.vehicle.statistics['State'].record(simulator.now(), 1)
-            self.vehicle.statistics['BusyWorkload'].record(simulator.now(), self.vehicle.total_busy_time)
-            self.vehicle.statistics['AccumulatedWorkload'].record(simulator.now(), self.vehicle.accumulated_relocation)
+        else:
+            self.vehicle.statistics['State'].record(simulator.now(), 2)
 
+        self.vehicle.statistics['BusyWorkload'].record(simulator.now(), self.vehicle.total_busy_time)
+        self.vehicle.statistics['AccumulatedWorkload'].record(simulator.now(), self.vehicle.accumulated_relocation)
         self.vehicle.statistics['MetersDriven'].record(simulator.now(), self.vehicle.statistics['MetersDriven'].data[-1][1] + self.edge['length'])
 
         # Schedule vehicle arrival to node
@@ -651,9 +653,9 @@ class EmergencyArrivalEvent(Sim.Event):
 
         self.emergency.assignBorough(simulator)
 
-        #if self.emergency.borough != 4:
-        #    simulator.activeEmergencies.remove(self.emergency)
-        #    return
+        if self.emergency.borough != 1:
+            simulator.activeEmergencies.remove(self.emergency)
+            return
 
         simulator.assignedNotArrived += 1
         # Statistics

@@ -891,20 +891,21 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
                             name='Const_6_{}'.format(u))
          for u, u_node in enumerate(U_nodes)}
 
-        # Constraint 7
-        # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
-        {u: model.addConstr(lhs=grb.quicksum(travel_times_UC[u][j] * r[u][j] * (0 if U[u_node].relocating and U[u_node].station == c_node else 1) for j, c_node in enumerate(C)),
-                            sense=grb.GRB.LESS_EQUAL,
-                            rhs=max_relocation_time * (1 if U[u_node].can_relocate else 0) * (0 if U[u_node].relocating else 1) * phi[u],
-                            name='Const_7_{}'.format(u))
-         for u, u_node in enumerate(U_nodes)}
+        if severity == 1:
+            # Constraint 7
+            # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
+            {u: model.addConstr(lhs=grb.quicksum(travel_times_UC[u][j] * r[u][j] * (0 if U[u_node].relocating and U[u_node].station == c_node else 1) for j, c_node in enumerate(C)),
+                                sense=grb.GRB.LESS_EQUAL,
+                                rhs=max_relocation_time * (1 if U[u_node].can_relocate else 0) * (0 if U[u_node].relocating else 1) * phi[u],
+                                name='Const_7_{}'.format(u))
+             for u, u_node in enumerate(U_nodes)}
 
-        # Constraint 8
-        # \sum_{u,j} r_uj \leq \theta
-        model.addConstr(lhs=grb.quicksum(grb.quicksum(r[u][j] for j, c_node in enumerate(C) if c_node != u_node) for u, u_node in enumerate(U_nodes)),
-                        sense=grb.GRB.LESS_EQUAL,
-                        rhs=max_relocations,
-                        name='max_relocations')
+            # Constraint 8
+            # \sum_{u,j} r_uj \leq \theta
+            model.addConstr(lhs=grb.quicksum(grb.quicksum(r[u][j] for j, c_node in enumerate(C) if c_node != u_node) for u, u_node in enumerate(U_nodes)),
+                            sense=grb.GRB.LESS_EQUAL,
+                            rhs=max_relocations,
+                            name='max_relocations')
 
         if severity == 0:
             # Constraint 5

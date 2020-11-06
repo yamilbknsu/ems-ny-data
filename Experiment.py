@@ -113,7 +113,7 @@ sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
                                              optimization_gap=.05,
                                              max_expected_simultaneous_relocations=8,
                                              dispatching_penalty=1,
-                                             max_relocation_time=800,
+                                             max_relocation_time=1200,
                                              max_redeployment_time=800,
                                              force_static=False,
                                              random_seed=0)
@@ -124,6 +124,6 @@ optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocato
 
 simulator: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)
 statistics = simulator.run()
-with open('test1.pickle', 'wb') as f:
+with open('test2.pickle', 'wb') as f:
     pickle.dump(statistics, f)
 print()

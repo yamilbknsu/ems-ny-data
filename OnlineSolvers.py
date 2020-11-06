@@ -964,7 +964,7 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
 
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
-            model.write("ModelErrors/SBRDANewmodel.ilp")
+            model.write("Model Errors/SBRDANewmodel.ilp")
 
         if severity == 0:
             final_positions = []

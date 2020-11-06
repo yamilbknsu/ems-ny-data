@@ -198,7 +198,7 @@ class ROA(OnlineSolvers.RelocationModel):
 
             if model.Status != grb.GRB.OPTIMAL:
                 model.computeIIS()
-                model.write("ModelErrors/ROAmodel.ilp")
+                model.write("Model Errors/ROAmodel.ilp")
 
             final_positions = []
             for j in range(len(C)):

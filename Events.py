@@ -653,9 +653,9 @@ class EmergencyArrivalEvent(Sim.Event):
 
         self.emergency.assignBorough(simulator)
 
-        if self.emergency.borough != 1:
-            simulator.activeEmergencies.remove(self.emergency)
-            return
+        # if self.emergency.borough != 1:
+        #     simulator.activeEmergencies.remove(self.emergency)
+        #     return
 
         simulator.assignedNotArrived += 1
         # Statistics

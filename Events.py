@@ -105,6 +105,7 @@ class RelocationAndDispatchingEvent(Sim.Event):
                 dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, severity=self.severity, borough=self.borough)
 
             simulator.ambulance_stations[self.borough][0 if self.severity == 0 else 1] = optimal_positions
+            self.optimal_positions = optimal_positions
 
             # Statistics
             C = simulator.parameters.candidates_borough[self.borough]
@@ -653,9 +654,12 @@ class EmergencyArrivalEvent(Sim.Event):
 
         self.emergency.assignBorough(simulator)
 
-        # if self.emergency.borough != 1:
-        #     simulator.activeEmergencies.remove(self.emergency)
-        #     return
+        if self.emergency.borough != 1:
+            simulator.activeEmergencies.remove(self.emergency)
+            return
+        
+        if self.emergency.name == 'Emergency 304' or self.emergency.name == 'Emergency 324':
+            print()
 
         simulator.assignedNotArrived += 1
         # Statistics
@@ -751,6 +755,7 @@ class AmbulanceArrivalEvent(Sim.Event):
         self.node: str = node
         self.prior_worked_time: float = prior_worked_time
         self.vehicle: Models.Vehicle = vehicle
+        self.vehicle_type = self.vehicle.type
 
         self.message: str = "Ambulance arrived to the system at node {}!".format(node)
 

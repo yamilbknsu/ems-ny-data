@@ -124,6 +124,6 @@ optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocato
 
 simulator: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)
 statistics = simulator.run()
-with open('test2.pickle', 'wb') as f:
+with open('test4.pickle', 'wb') as f:
     pickle.dump(statistics, f)
 print()

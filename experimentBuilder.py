@@ -3,11 +3,11 @@ import pickle
 
 # Testing sets
 days = ['friday']
-model = ['SBRDANew', 'SBRDAStatic', 'ROA']
+model = ['SBRDA', 'SBRDANew', 'SBRDAStatic', 'ROA']
 dataReplica = list(range(10))
 simTime = [24 * 3600]
 uberHours = [0]
-ambulanceDistribution = [[355, 802], [319, 722]]  # , [284, 642]]
+ambulanceDistribution = [[355, 802]]  # , [319, 722] , [284, 642]]
 workloadRestriction = [True]
 workloadLimit = [.7]
 simultaneous_relocations = [8]

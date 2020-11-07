@@ -750,9 +750,10 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
             filtered_survival = np.array([[1 / (cand_demand_travel[j, i] + 1) if c_node in params.reachable_inverse[t][d_node] else 0
                                            for j, c_node in enumerate(C)]
                                           for i, d_node in enumerate(D)]).T
-            rates = 1 / D_rates[severity].loc[t + 1, D].values
-            rates[rates == np.inf] = 0
-            coefficients = rates * filtered_survival
+            #rates = 1 / D_rates[severity].loc[t + 1, D].values
+            #rates[rates == np.inf] = 0
+            #coefficients = rates * filtered_survival
+            coefficients = D_rates[severity].loc[t + 1, D].values * filtered_survival
 
         # Create the mip solver with the CBC backend.
         model = grb.Model(name="ALS" if severity == 0 else "BLS")
@@ -809,7 +810,8 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
             # Constraint
             {(i, j): model.addConstr(lhs=x[j][D.index(d_node)],
                                      sense=grb.GRB.LESS_EQUAL,
-                                     rhs=grb.quicksum(r[u][C.index(c_node)] * phi[u] for u in range(len(U_nodes))),
+                                     # rhs=grb.quicksum(r[u][C.index(c_node)] * phi[u] for u in range(len(U_nodes))),
+                                     rhs=grb.quicksum(r[u][C.index(c_node)] for u in range(len(U_nodes))),
                                      name='Const_1_{}_{}'.format(i, j))
              for j, c_node in enumerate(C)
              for i, d_node in enumerate(reachable_demand[c_node]) if d_node in D}
@@ -990,6 +992,8 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
                 final_dispatching[simulator.newUberVehicle(simulator.parameters.uber_nodes[emergency.node], emergency.borough)] = emergency
 
         if severity == 0:
+            print()
+        else:
             print()
 
         return final_positions, final_repositioning, final_dispatching

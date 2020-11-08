@@ -338,22 +338,23 @@ class AmbulanceEndCleaningEvent(Sim.Event):
 
         self.vehicle.cleaning = False
 
-        if self.vehicle.leaving or self.vehicle.type == 3:
-            return AmbulanceLeavingEvent(simulator, simulator.now(), self.vehicle)
+        if not self.vehicle.isUber:
+            if self.vehicle.leaving:
+                return AmbulanceLeavingEvent(simulator, simulator.now(), self.vehicle)
 
-        dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, self.vehicle.type, self.vehicle.borough)
-        if self.vehicle in dispatching_dict.keys():
-            # Mark emergency as assigned
-            dispatching_dict[self.vehicle].markStatus(1)
-            simulator.assignedEmergencies.append(dispatching_dict[self.vehicle])
+            dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, self.vehicle.type, self.vehicle.borough)
+            if self.vehicle in dispatching_dict.keys():
+                # Mark emergency as assigned
+                dispatching_dict[self.vehicle].markStatus(1)
+                simulator.assignedEmergencies.append(dispatching_dict[self.vehicle])
 
-            # Schedule the assignment event
-            return AssignedEvent(simulator, simulator.now(), self.vehicle, dispatching_dict[self.vehicle])
+                # Schedule the assignment event
+                return AssignedEvent(simulator, simulator.now(), self.vehicle, dispatching_dict[self.vehicle])
 
-        if simulator.parameters.force_static:
-            return TripAssignedEvent(simulator, simulator.now(), self.vehicle, self.vehicle.station)
-        else:
-            return AmbulanceRedeployEvent(self.entity, simulator.now(), self.vehicle)
+            if simulator.parameters.force_static:
+                return TripAssignedEvent(simulator, simulator.now(), self.vehicle, self.vehicle.station)
+            else:
+                return AmbulanceRedeployEvent(self.entity, simulator.now(), self.vehicle)
 
 
 class AmbulanceEndTripEvent(Sim.Event):
@@ -418,11 +419,12 @@ class AmbulanceEndTripEvent(Sim.Event):
                     return AmbulanceStartAttendingEvent(self.vehicle, simulator.now(), self.vehicle, self.vehicle.patient)
             elif status == 2:
                 # Mark ambulance as cleaning and schedule finish cleaning event
-                self.vehicle.cleaning = True
-                self.vehicle.total_busy_time += 10 * 60
-                simulator.insert(AmbulanceEndCleaningEvent(simulator, simulator.now() + 10 * 60, self.vehicle))
-                self.vehicle.statistics['BusyWorkload'].record(simulator.now(), self.vehicle.total_busy_time)
-                self.vehicle.statistics['AccumulatedWorkload'].record(simulator.now(), self.vehicle.accumulated_relocation)
+                if not self.vehicle.isUber:
+                    self.vehicle.cleaning = True
+                    self.vehicle.total_busy_time += 10 * 60
+                    simulator.insert(AmbulanceEndCleaningEvent(simulator, simulator.now() + 10 * 60, self.vehicle))
+                    self.vehicle.statistics['BusyWorkload'].record(simulator.now(), self.vehicle.total_busy_time)
+                    self.vehicle.statistics['AccumulatedWorkload'].record(simulator.now(), self.vehicle.accumulated_relocation)
 
                 if self.vehicle.patient is not None:
                     # Statistics

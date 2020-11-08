@@ -879,7 +879,7 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
             # \sum_{j} r_uj\tau_uj \leq \Phi_u\vartheta
             {u: model.addConstr(lhs=grb.quicksum(travel_times_UC[u][j] * r[u][j] * (0 if U[u_node].relocating and U[u_node].station == c_node else 1) for j, c_node in enumerate(C)),
                                 sense=grb.GRB.LESS_EQUAL,
-                                rhs=max_relocation_time * (1 if U[u_node].can_relocate else 0) * (0 if U[u_node].relocating else 1) * phi[u],
+                                rhs=max_relocation_time * (0 if U[u_node].relocating else 1) * phi[u],
                                 name='Const_7_{}'.format(u))
              for u, u_node in enumerate(U_nodes)}
 

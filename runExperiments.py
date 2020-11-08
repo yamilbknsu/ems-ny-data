@@ -149,10 +149,10 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
         # ambulance_distribution=[[0, 70, 74, 89, 65, 14],
         #                        [0, 114, 126, 140, 105, 20]]
 
-        if 'SBRDA' in experiment['model']:
-            optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
-        elif 'SBRDANew' in experiment['model']:
-            optimizer = OnlineSolvers.AlternativeUberRelocatorDispatcher()
+        if 'SBRDANew' in experiment['model']:
+            optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocatorDispatcher()
+        elif 'SBRDA' in experiment['model']:
+            optimizer = OnlineSolvers.UberRelocatorDispatcher()
         else:
             optimizer = ROASolver.ROA()
 

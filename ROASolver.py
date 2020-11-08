@@ -110,12 +110,12 @@ class ROA(OnlineSolvers.RelocationModel):
                 model.addConstr(lhs=r[u][C.index(U[u_node].station)],
                                 sense=grb.GRB.EQUAL,
                                 rhs=1,
-                                name='Const_6_{}'.format(u))
+                                name='Const_4_{}'.format(u))
 
         {u: model.addConstr(lhs=U[u_node].total_busy_time + grb.quicksum(travel_times_UC[u, j] * r[u][j] * (0 if U[u_node].relocating and c_node == U[u_node].station else 1) for j, c_node in enumerate(C)),
                             sense=grb.GRB.LESS_EQUAL,
                             rhs=alpha[u],
-                            name='Const_6_{}'.format(u))
+                            name='Const_5_{}'.format(u))
          for u, u_node in enumerate(U_nodes)}
 
         model.setParam('MIPGap', params.optimization_gap)
@@ -123,6 +123,10 @@ class ROA(OnlineSolvers.RelocationModel):
 
         print(time.time() - start_time, '- Solving the model...')
         model.optimize()
+
+        if model.Status != grb.GRB.OPTIMAL:
+            model.computeIIS()
+            model.write("Model Errors/ROAmodel.ilp")
 
         # ----------------
         # Second part
@@ -173,18 +177,18 @@ class ROA(OnlineSolvers.RelocationModel):
                     model.addConstr(lhs=r[u][C.index(U[u_node].station)],
                                     sense=grb.GRB.EQUAL,
                                     rhs=1,
-                                    name='Const_6_{}'.format(u))
+                                    name='Const_4_{}'.format(u))
 
             {u: model.addConstr(lhs=U[u_node].total_busy_time + grb.quicksum(travel_times_UC[u, j] * r[u][j] * (0 if U[u_node].relocating and c_node == U[u_node].station else 1) for j, c_node in enumerate(C)),
                                 sense=grb.GRB.LESS_EQUAL,
                                 rhs=alpha[u],
-                                name='Const_6_{}'.format(u))
+                                name='Const_5_{}'.format(u))
              for u, u_node in enumerate(U_nodes)}
 
             model.addConstr(lhs=Z,
                             sense=grb.GRB.LESS_EQUAL,
                             rhs=grb.LinExpr(D_rates[severity].loc[t + 1, D].values.tolist(), y),
-                            name='Const_5')
+                            name='Const_6')
 
             model.setParam('MIPGap', params.optimization_gap)
             model.setParam('LogToConsole', 1 if simulator.verbose else 0)

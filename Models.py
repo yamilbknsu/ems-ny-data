@@ -78,7 +78,7 @@ class SimulationParameters:
                  uncovered_penalty: float = 10 * 24 * 3600,
                  late_response_penalty: float = 60,
                  dispatching_penalty: float = .01,
-                 travel_distance_penalty: float = 1e-6,
+                 travel_distance_penalty: float = 1e-10,
                  target_relocation_time: float = 2160,
                  max_relocation_time: float = 1200,
                  max_redeployment_time: float = 800,

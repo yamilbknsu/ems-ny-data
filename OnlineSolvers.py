@@ -712,7 +712,7 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
             weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(t)
             travel_times_UC = np.array(simulator.city_graph.shortest_paths(U_to_nodes, C, weights))
             travel_times_CE = np.array([np.squeeze(simulator.city_graph.shortest_paths(U_to_nodes, e, weights)).reshape(len(U_to_nodes), ) for e in E_pos]).T
-            closest_dispatch_BLS = (np.sum(D_rates[1][D].values, axis=1) @ np.array([[1, 0, 0], [1 / 3, 2 / 3, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]]))[int(simulator.now() / 8 * 3600)] / 8 < 1.1
+            closest_dispatch_BLS = (np.sum(D_rates[1][D].values, axis=1) @ np.array([[1, 0, 0], [1 / 3, 2 / 3, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]]))[int(simulator.now() / (8 * 3600))] / 8 < 1.1
         else:
             alpha = [24 * 3600 for v in Vehicles]  # Set it to the possible maximum value so the restriction is relaxed
             phi = [np.exp(-2.5 * (U[u_node].accumulated_relocation / target_relocation)) for u_node in U_nodes]

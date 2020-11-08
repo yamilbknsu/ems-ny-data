@@ -1032,12 +1032,15 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
 
             # Parameters
             t = simulator.timePeriod()
+            D_rates = params.demand_rates
+            D = params.demand_borough[borough]
 
             average_RHS = 15 * 60
             uncovered_penalty = params.uncovered_penalty
             late_response_penalty = params.late_response_penalty
             dispatching_penalty = params.dispatching_penalty
             RHS_limit = max(params.uber_seconds * simulator.now() / params.simulation_time, simulator.uber_seconds)
+            closest_dispatch_BLS = (np.sum(D_rates[1][D].values, axis=1) @ np.array([[1, 0, 0], [1 / 3, 2 / 3, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]]))[int(simulator.now() / (8 * 3600))] / 8 < 1.1
 
             # Sets
             E = simulator.getUnassignedEmergencies(severity + 1, borough)
@@ -1077,7 +1080,8 @@ class AlternativeUberRelocatorDispatcher(UberRelocatorDispatcher):
             travel_times_CE = np.array([np.squeeze(simulator.city_graph.shortest_paths(U_to_nodes, e, weights)).reshape(len(U_to_nodes), ) for e in E_pos]).T
 
             b_bar = np.mean([U[u_node].total_busy_time for u_node in U_nodes]) if len(U) > 0 else 1e10
-            rho = [[U[u_node].total_busy_time + travel_times_CE[u][e] + params.mean_busytime[severity].at[t + 1, params.graph_to_demand[e_node]] - b_bar for e, e_node in enumerate(E_pos)] for u, u_node in enumerate(U_nodes)]
+            rho = [[U[u_node].total_busy_time + travel_times_CE[u][e] + 3600 * params.mean_busytime[severity].at[t + 1, params.graph_to_demand[e_node]] - b_bar if not closest_dispatch_BLS
+                    else travel_times_CE[u][e] for e, e_node in enumerate(E_pos)] for u, u_node in enumerate(U_nodes)]
 
             # Objective function
             model.setObjective(grb.quicksum(uncovered_penalty * b[e] + late_response_penalty * w[e] + dispatching_penalty * grb.quicksum(rho[u][e] * k[u][e] for u, u_node in enumerate(U_nodes)) for e, e_node in enumerate(E_pos)))     # noqa: W503

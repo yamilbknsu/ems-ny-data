@@ -338,7 +338,7 @@ class AmbulanceEndCleaningEvent(Sim.Event):
 
         self.vehicle.cleaning = False
 
-        if self.vehicle.leaving:
+        if self.vehicle.leaving or self.vehicle.type == 3:
             return AmbulanceLeavingEvent(simulator, simulator.now(), self.vehicle)
 
         dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, self.vehicle.type, self.vehicle.borough)
@@ -768,6 +768,14 @@ class AmbulanceArrivalEvent(Sim.Event):
         simulator.statistics[('ALS' if self.vehicle.type == 0 else 'BLS') + 'VehiclesInSystem'].record(simulator.now(), len([v for v in simulator.vehicles if v.type == self.vehicle.type]))
 
         if simulator.now() > 0.1:
+            dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, self.vehicle.type, self.vehicle.borough)
+            if self.vehicle in dispatching_dict.keys():
+                # Mark emergency as assigned
+                dispatching_dict[self.vehicle].markStatus(1)
+                simulator.assignedEmergencies.append(dispatching_dict[self.vehicle])
+
+                # Schedule the assignment event
+                return AssignedEvent(simulator, simulator.now(), self.vehicle, dispatching_dict[self.vehicle])
             return AmbulanceRedeployEvent(simulator, simulator.now(), self.vehicle)
             # return RelocationAndDispatchingEvent(simulator, simulator.now(), severity=self.vehicle.type, borough=self.vehicle.borough)
 

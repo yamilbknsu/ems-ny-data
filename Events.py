@@ -37,7 +37,7 @@ class ComputeParemeters(Sim.Event):
     def execute(self, simulator: "Models.EMSModel"):
         # Update the mean values in the simulation parameters
         for key, value in simulator.time_records.items():
-            simulator.parameters.mean_busytime[key[1]].at[key[0], key[2]] = np.mean(value)
+            simulator.parameters.mean_busytime[key[1]].at[key[0], key[2]] = np.mean(np.array(value) / 3600)
 
         simulator.insert(ComputeParemeters(simulator, simulator.now() + 3600))
 
@@ -656,11 +656,11 @@ class EmergencyArrivalEvent(Sim.Event):
 
         self.emergency.assignBorough(simulator)
 
-        #if self.emergency.borough != 1:
-        #    simulator.activeEmergencies.remove(self.emergency)
-        #    return
-        #
-        #if self.emergency.name == 'Emergency 304' or self.emergency.name == 'Emergency 324':
+        if self.emergency.borough != 1:
+            simulator.activeEmergencies.remove(self.emergency)
+            return
+        
+        #if self.emergency.name == 'Emergency 318' or self.emergency.name == 'Emergency 324':
         #    print()
 
         simulator.assignedNotArrived += 1

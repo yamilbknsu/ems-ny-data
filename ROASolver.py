@@ -309,8 +309,8 @@ class ROA(OnlineSolvers.RelocationModel):
         simulator.statistics['OptimizationTime{}{}'.format('ALS' if severity == 0 else 'BLS', borough)].record(simulator.now(), time.time() - start_time)
 
         if model.Status != grb.GRB.OPTIMAL:
-                model.computeIIS()
-                model.write("ModelErrors/ROAmodel.ilp")
+            model.computeIIS()
+            model.write("ModelErrors/ROAmodel.ilp")
 
         final_positions = []
         for j in range(len(C)):

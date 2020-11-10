@@ -3,13 +3,13 @@ import pickle
 
 # Testing sets
 days = ['friday']
-model = ['SBRDANew', 'SBRDAStatic', 'ROA']
-dataReplica = list(range(20))
+model = ['ROA', 'SBRDANew', 'SBRDAStatic']
+dataReplica = list(range(30))
 simTime = [24 * 3600]
-uberHours = [0, 100, 250]
+uberHours = {'SBRDANew': [0, 100, 250], 'ROA': [0], 'SBRDAStatic': [0]}
 ambulanceDistribution = [[355, 802], [319, 722], [284, 642]]
 workloadRestriction = [True]
-workloadLimit = [.7]
+workloadLimit = [.7, .6]
 simultaneous_relocations = [8]
 uncovered_penalty = [10 * 24 * 3600]
 late_response_penalty = [60]
@@ -25,7 +25,7 @@ EXPERIMENTS = [{'day': day, 'model': m, 'dataReplica': rep, 'simTime': time, 'am
                 'parameters_dir': 'Base', 'uberHours': uH, 'relocQty': relocQty, 'uncovered': unc, 'lateResponse': lr, 'disaptchingPenalt': disp, 'ttPenalty': ttp, 'targetReloc': targetReloc,
                 'maxReloc': maxreloc, 'relocCooldown': relocCooldown, 'maxRedeployment': maxRed}
                for day in days for m in model for gap in GAP for amb in ambulanceDistribution for wlL in workloadLimit for wlRes in workloadRestriction
-               for rep in dataReplica for time in simTime for uH in uberHours for relocQty in simultaneous_relocations for unc in uncovered_penalty for lr in late_response_penalty
+               for rep in dataReplica for time in simTime for uH in uberHours[m] for relocQty in simultaneous_relocations for unc in uncovered_penalty for lr in late_response_penalty
                for disp in dispatching_penalty for ttp in travel_distance_penalty for targetReloc in target_relocTime for maxreloc in max_relocation_time for relocCooldown in relocation_cooldown
                for maxRed in max_redeployment_time]
 
@@ -52,7 +52,7 @@ for experiment in EXPERIMENTS:
                                                                           experiment['maxRedeployment'],
                                                                           experiment['relocCooldown'])
     output.append([name, experiment])
-
+print(len(EXPERIMENTS))
 
 with open('experimentsConfig.pickle', 'wb') as f:
     pickle.dump(output, f)

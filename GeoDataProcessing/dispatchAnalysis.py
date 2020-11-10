@@ -123,7 +123,7 @@ if __name__ == "__main__":
     nodes_file = 'ems-ny-data//NYC Graph//NYC_nodes_revised.geojson'
 
     initial_dataset_setups = ['LS19', 'HS19']
-    spatio_temporal_replications = list(range(30))
+    spatio_temporal_replications = list(range(50))
 
     gdfs = []
     nodes = gpd.read_file(DATA_DIR + nodes_file)
@@ -133,8 +133,8 @@ if __name__ == "__main__":
 
     for setup, strep in itertools.product(initial_dataset_setups, spatio_temporal_replications):                                # noqa E501
 
-        arrivals_file = 'Codigos Seba//output_arrivals//Monday//{}//stkde_nsnr_{}.shp'.format(setup, strep)
-        save_dir = DATA_DIR + 'ems-ny-data//Arrival events//Monday//{}//'.format(setup)
+        arrivals_file = 'Codigos Seba//output_arrivals//Friday//{}//stkde_nsnr_{}.shp'.format(setup, strep)
+        save_dir = DATA_DIR + 'ems-ny-data//Arrival events//Friday//{}//'.format(setup)
 
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
@@ -153,6 +153,6 @@ if __name__ == "__main__":
         severity_level = 1
         if setup == 'LS19':
             severity_level = 2
-        arrivalShpToArrivalEvents(gdfs[-1], nodes, datetime(2020, 1, 13), save_dir+save_name, 1, severity_level=severity_level)
+        arrivalShpToArrivalEvents(gdfs[-1], nodes, datetime(2020, 1, 17), save_dir+save_name, 1, severity_level=severity_level)
 
     print()

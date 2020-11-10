@@ -76,8 +76,9 @@ class ROA(OnlineSolvers.RelocationModel):
             travel_times_UC = np.array(simulator.city_graph.shortest_paths(U_to_nodes, C, weights))
             alpha = [max(U[v].total_busy_time + min(travel_times_UC[u]), max_overload * (simulator.now() - U[v].arrive_in_system)) for u, v in enumerate(U)]
         else:
-            alpha = [24 * 3600 for v in Vehicles]  # Set it to the possible maximum value so the restriction is relaxed
-            travel_times_UC = np.zeros((len(U_to_nodes), len(C)))
+            weights = np.array(simulator.city_graph.es['length']) / simulator.parameters.getSpeedList(t)
+            alpha = [24 * 36000 for v in Vehicles]  # Set it to the possible maximum value so the restriction is relaxed
+            travel_times_UC = np.array(simulator.city_graph.shortest_paths(U_to_nodes, C, weights))
 
         # Objective function
         model.setObjective(grb.LinExpr(D_rates[severity].loc[t + 1, D].values, y))

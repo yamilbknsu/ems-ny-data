@@ -814,10 +814,9 @@ class EndSimulationEvent(Sim.Event):
         self.message: str = "End of simulation"
 
     def execute(self, simulator: "Models.EMSModel"):
-        simulator.statistics['RunTime'].record(time.time() - simulator.sim_start_time)
-        simulator.events.empty()
-
         while len(simulator.vehicles) > 0:
             v = simulator.vehicles[0]
             E = AmbulanceLeavingEvent(simulator, simulator.now(), v)
             E.execute(simulator)
+        simulator.statistics['RunTime'].record(time.time() - simulator.sim_start_time)
+        simulator.events.empty()

@@ -20,7 +20,7 @@ General TODO for the project
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', type=int, default=450, help='Index of the experiment to run')
+parser.add_argument('-i', type=int, default=33, help='Index of the experiment to run')
 parser.add_argument('-n', type=int, default=1, help='Number of replicas per task')
 args = parser.parse_args()
 
@@ -145,6 +145,7 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
                                                      relocation_cooldown=experiment['relocCooldown'],
                                                      max_relocation_time=experiment['maxReloc'],
                                                      max_redeployment_time=experiment['maxRedeployment'],
+                                                     name=name,
                                                      random_seed=experiment['dataReplica'])
         # ambulance_distribution=[[0, 70, 74, 89, 65, 14],
         #                        [0, 114, 126, 140, 105, 20]]

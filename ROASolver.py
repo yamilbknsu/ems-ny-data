@@ -1,4 +1,5 @@
 import time
+import pickle
 import OnlineSolvers
 import numpy as np
 import gurobipy as grb
@@ -127,7 +128,9 @@ class ROA(OnlineSolvers.RelocationModel):
 
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
-            model.write("Model Errors/ROAmodel.ilp")
+            model.write("ModelErrors/{}.ilp".format(params.name))
+            with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
+                pickle.dump(simulator.getStatistics(), f)
 
         # ----------------
         # Second part
@@ -203,7 +206,9 @@ class ROA(OnlineSolvers.RelocationModel):
 
             if model.Status != grb.GRB.OPTIMAL:
                 model.computeIIS()
-                model.write("Model Errors/ROAmodel.ilp")
+                model.write("ModelErrors/{}.ilp".format(params.name))
+                with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
+                    pickle.dump(simulator.getStatistics(), f)
 
             final_positions = []
             for j in range(len(C)):
@@ -311,7 +316,9 @@ class ROA(OnlineSolvers.RelocationModel):
 
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
-            model.write("ModelErrors/ROAmodel.ilp")
+            model.write("ModelErrors/{}.ilp".format(params.name))
+            with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
+                pickle.dump(simulator.getStatistics(), f)
 
         final_positions = []
         for j in range(len(C)):

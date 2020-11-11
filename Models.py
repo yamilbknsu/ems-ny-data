@@ -86,6 +86,7 @@ class SimulationParameters:
                  max_expected_simultaneous_relocations: int = 4,
                  maximum_overload_ALS: float = .4,
                  maximum_overload_BLS: float = .4,
+                 name: str = 'Model',
                  random_seed: float = 420):
         """
         A SimulationParameters instance is meant to hold all the parameters
@@ -175,6 +176,7 @@ class SimulationParameters:
                                                     spend on relocation. Defaults to .5.
             random_seed (float, optional): Seed for random generator. Defaults to 420.
         """
+        self.name = name
 
         # General parameters
         self.simulation_time = simulation_time

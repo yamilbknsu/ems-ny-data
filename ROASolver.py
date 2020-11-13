@@ -102,7 +102,7 @@ class ROA(OnlineSolvers.RelocationModel):
          for i, d_node in enumerate(D)}
 
         {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
-                            sense=grb.GRB.LESS_EQUAL,
+                            sense=grb.GRB.EQUAL,
                             rhs=1,
                             name='Const_3_{}'.format(u))
          for u, u_node in enumerate(U_nodes)}
@@ -113,6 +113,13 @@ class ROA(OnlineSolvers.RelocationModel):
                                 sense=grb.GRB.EQUAL,
                                 rhs=1,
                                 name='Const_4_{}'.format(u))
+        if not initial:
+            for v, vehicle in enumerate(Vehicles):
+                if vehicle not in U.values():
+                    model.addConstr(lhs=grb.quicksum(r[u][C.index(vehicle.station)] for u in range(len(U))),
+                                    sense=grb.GRB.EQUAL,
+                                    rhs=0,
+                                    name='Const_X_{}'.format(vehicle.name))
 
         {u: model.addConstr(lhs=U[u_node].total_busy_time + grb.quicksum(travel_times_UC[u, j] * r[u][j] * (0 if U[u_node].relocating and c_node == U[u_node].station else 1) for j, c_node in enumerate(C)),
                             sense=grb.GRB.LESS_EQUAL,
@@ -129,7 +136,7 @@ class ROA(OnlineSolvers.RelocationModel):
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
             model.write("Model Errors/{}.ilp".format(params.name))
-            with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
+            with open('Error Statistics/{}.pickle'.format(params.name), 'wb') as f:
                 pickle.dump(simulator.getStatistics(), f)
 
         # ----------------
@@ -171,7 +178,7 @@ class ROA(OnlineSolvers.RelocationModel):
              for i, d_node in enumerate(D)}
 
             {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
-                                sense=grb.GRB.LESS_EQUAL,
+                                sense=grb.GRB.EQUAL,
                                 rhs=1,
                                 name='Const_3_{}'.format(u))
              for u, u_node in enumerate(U_nodes)}
@@ -182,6 +189,13 @@ class ROA(OnlineSolvers.RelocationModel):
                                     sense=grb.GRB.EQUAL,
                                     rhs=1,
                                     name='Const_4_{}'.format(u))
+            if not initial:
+                for v, vehicle in enumerate(Vehicles):
+                    if vehicle not in U.values():
+                        model.addConstr(lhs=grb.quicksum(r[u][C.index(vehicle.station)] for u in range(len(U))),
+                                        sense=grb.GRB.EQUAL,
+                                        rhs=0,
+                                        name='Const_X_{}'.format(vehicle.name))
 
             {u: model.addConstr(lhs=U[u_node].total_busy_time + grb.quicksum(travel_times_UC[u, j] * r[u][j] * (0 if U[u_node].relocating and c_node == U[u_node].station else 1) for j, c_node in enumerate(C)),
                                 sense=grb.GRB.LESS_EQUAL,
@@ -207,14 +221,14 @@ class ROA(OnlineSolvers.RelocationModel):
             if model.Status != grb.GRB.OPTIMAL:
                 model.computeIIS()
                 model.write("Model Errors/{}.ilp".format(params.name))
-                with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
+                with open('Error Statistics/{}.pickle'.format(params.name), 'wb') as f:
                     pickle.dump(simulator.getStatistics(), f)
 
             final_positions = []
             for j in range(len(C)):
-                if x[j].x == 1:
+                if np.round(x[j].x) == 1:
                     final_positions.append(C[j])
-            reposition_matrix = [[r[u][C.index(k)].x for k in final_positions] for u in range(len(U_nodes))]
+            reposition_matrix = [[np.round(r[u][C.index(k)].x) for k in final_positions] for u in range(len(U_nodes))]
             for u, node in enumerate(U_nodes):
                 if 1 in reposition_matrix[u] and final_positions[reposition_matrix[u].index(1)] != U[node].station:
                     final_repositioning[U[node]] = final_positions[reposition_matrix[u].index(1)]
@@ -317,7 +331,7 @@ class ROA(OnlineSolvers.RelocationModel):
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
             model.write("Model Errors/{}.ilp".format(params.name))
-            with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
+            with open('Error Statistics/{}.pickle'.format(params.name), 'wb') as f:
                 pickle.dump(simulator.getStatistics(), f)
 
         final_positions = []

@@ -20,12 +20,13 @@ General TODO for the project
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', type=int, default=100, help='Index of the experiment to run')
-parser.add_argument('-n', type=int, default=1, help='Number of replicas per task')
+parser.add_argument('-i', type=int, default=1, help='Index of the experiment to run')
+parser.add_argument('-n', type=int, default=50, help='Number of replicas per task')
 args = parser.parse_args()
 
 # Graph importing
 DATA_DIR = ''
+RESULTS_DIR='D:/FTP Results/Final1/'
 
 with open(DATA_DIR + 'NYC Graph//NYC_graph_revised.pickle', 'rb') as file:
     graph: igraph.Graph = pickle.load(file)
@@ -52,7 +53,7 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
 
     skip = False
 
-    if os.path.exists('StatisticsResults/{}.pickle'.format(name)):
+    if os.path.exists('{}/{}.pickle'.format(RESULTS_DIR, name)):
         print('Skipping ' + name)
         skip = True
 
@@ -158,7 +159,7 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
         simulator: Models.EMSModel = Models.EMSModel(graph, generator, parameters=sim_parameters, optimizer=optimizer, verbose=True)
         statistics = simulator.run()
 
-        with open('StatisticsResults/{}.pickle'.format(name), 'wb') as f:
+        with open('{}/{}.pickle'.format(RESULTS_DIR, name), 'wb') as f:
             pickle.dump(statistics, f)
 
 

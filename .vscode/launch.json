@@ -21,7 +21,7 @@
             "request": "launch",
             "stopOnEntry": false,
             "pythonPath": "${command:python.interpreterPath}",
-            "program": "GeoDataProcessing/OSMDownloader.py",
+            "program": "runExperiments.alternative.py",
             "cwd": "${workspaceRoot}",
             "env": {},
             "envFile": "${workspaceRoot}/.env"

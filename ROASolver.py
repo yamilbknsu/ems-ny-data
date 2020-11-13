@@ -102,7 +102,7 @@ class ROA(OnlineSolvers.RelocationModel):
          for i, d_node in enumerate(D)}
 
         {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
-                            sense=grb.GRB.EQUAL,
+                            sense=grb.GRB.LESS_EQUAL,
                             rhs=1,
                             name='Const_3_{}'.format(u))
          for u, u_node in enumerate(U_nodes)}
@@ -128,7 +128,7 @@ class ROA(OnlineSolvers.RelocationModel):
 
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
-            model.write("ModelErrors/{}.ilp".format(params.name))
+            model.write("Model Errors/{}.ilp".format(params.name))
             with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
                 pickle.dump(simulator.getStatistics(), f)
 
@@ -206,7 +206,7 @@ class ROA(OnlineSolvers.RelocationModel):
 
             if model.Status != grb.GRB.OPTIMAL:
                 model.computeIIS()
-                model.write("ModelErrors/{}.ilp".format(params.name))
+                model.write("Model Errors/{}.ilp".format(params.name))
                 with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
                     pickle.dump(simulator.getStatistics(), f)
 
@@ -316,7 +316,7 @@ class ROA(OnlineSolvers.RelocationModel):
 
         if model.Status != grb.GRB.OPTIMAL:
             model.computeIIS()
-            model.write("ModelErrors/{}.ilp".format(params.name))
+            model.write("Model Errors/{}.ilp".format(params.name))
             with open('Error Statistics/{}.pickle'.format(params.name), 'rb') as f:
                 pickle.dump(simulator.getStatistics(), f)
 

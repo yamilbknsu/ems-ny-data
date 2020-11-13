@@ -101,11 +101,19 @@ class ROA(OnlineSolvers.RelocationModel):
                             name='Const_2_{}'.format(i))
          for i, d_node in enumerate(D)}
 
-        {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
-                            sense=grb.GRB.EQUAL,
-                            rhs=1,
-                            name='Const_3_{}'.format(u))
-         for u, u_node in enumerate(U_nodes)}
+        if initial:
+            {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
+                                sense=grb.GRB.EQUAL,
+                                rhs=1,
+                                name='Const_3_{}'.format(u))
+             for u, u_node in enumerate(U_nodes)}
+
+        else:
+            {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
+                                sense=grb.GRB.LESS_EQUAL,
+                                rhs=1,
+                                name='Const_3_{}'.format(u))
+             for u, u_node in enumerate(U_nodes)}
 
         for u, u_node in enumerate(U_nodes):
             if U[u_node].relocating:
@@ -177,11 +185,19 @@ class ROA(OnlineSolvers.RelocationModel):
                                 name='Const_2_{}'.format(i))
              for i, d_node in enumerate(D)}
 
-            {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
-                                sense=grb.GRB.EQUAL,
-                                rhs=1,
-                                name='Const_3_{}'.format(u))
-             for u, u_node in enumerate(U_nodes)}
+            if initial:
+                {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
+                                    sense=grb.GRB.EQUAL,
+                                    rhs=1,
+                                    name='Const_3_{}'.format(u))
+                 for u, u_node in enumerate(U_nodes)}
+
+            else:
+                {u: model.addConstr(lhs=grb.quicksum(r[u][k] for k, k_node in enumerate(C)),
+                                    sense=grb.GRB.LESS_EQUAL,
+                                    rhs=1,
+                                    name='Const_3_{}'.format(u))
+                 for u, u_node in enumerate(U_nodes)}
 
             for u, u_node in enumerate(U_nodes):
                 if U[u_node].relocating:

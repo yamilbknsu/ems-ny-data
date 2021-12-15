@@ -243,9 +243,6 @@ class Simulator(AbstractSimulator):
             if self.verbose:
                 print('{:>17}'.format('### Chained:'), chained_event.message)
             chained_event = chained_event.execute(self)
-
-        #for event in to_record_events:
-        #    self.recorder.record(event)
         
         return to_record_events
     
@@ -288,7 +285,6 @@ class ListQueue(object):
         '''
         if isinstance(x, Event):
             heappush(self.elements, x)
-            # heapify(self.elements)
         else:
             raise ValueError('This is not an event')
 

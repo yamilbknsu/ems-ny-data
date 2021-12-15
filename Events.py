@@ -104,7 +104,7 @@ class RelocationAndDispatchingEvent(Sim.Event):
                 optimal_positions, reposition_dict = [], {}
                 dispatching_dict = simulator.optimizer.dispatch(simulator, simulator.parameters, severity=self.severity, borough=self.borough)
 
-            simulator.ambulance_stations[self.borough][0 if self.severity == 0 else 1] = optimal_positions
+            #simulator.ambulance_stations[self.borough][0 if self.severity == 0 else 1] = optimal_positions
             self.optimal_positions = optimal_positions
 
             # Statistics
@@ -680,7 +680,7 @@ class EmergencyArrivalEvent(Sim.Event):
                 dispatching_dict[v].markStatus(1)
                 simulator.assignedEmergencies.append(dispatching_dict[v])
         else:
-            # Chain an optimization event right next to the arrival
+            # Chain an optimization event right after the arrival
             return RelocationAndDispatchingEvent(simulator, simulator.now(), 0 if self.emergency.severity == 1 else 1, self.emergency.borough)
 
 

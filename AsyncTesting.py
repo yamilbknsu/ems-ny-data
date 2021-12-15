@@ -6,6 +6,7 @@ import SimulatorBasics
 
 import igraph
 import pickle
+import json
 import threading
 import pandas as pd
 import geopandas as gpd
@@ -132,7 +133,7 @@ with open(DATA_DIR + 'Arrival Events//{}//HS19//strep_{}.pickle'.format('Friday'
 
 generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
 
-sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
+sim_parameters = Models.SimulationParameters(simulation_time=.5 * 3600,
                                              initial_nodes=None,
                                              speeds_df=speeds,
                                              candidate_nodes=candidate_nodes,
@@ -172,6 +173,12 @@ optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocato
 
 # emsModel: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)# Initializing the model
 emsModel = AsyncEMSModel(graph, generator, optimizer, sim_parameters)
+#emsModel.run()
+#events = emsModel.getAndClearEvents()
+## Serializing json  
+#json_object = json.dumps(events, indent = 4)
+#with open("Maps and others/30minutesEvents.json", "w") as outfile: 
+#    outfile.write(json_object)
 
 # The simulation Thread
 simulationThread = threading.Thread(target=emsModel.run, daemon=True)

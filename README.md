@@ -16,7 +16,7 @@
 
 The usage of these files is detailed in the [Usage](#usage) section.
 * runOneExperiment: *Manually* execute one instance of the model with hard-coded parameters. Used for feature testing and debugging.
-* experimentBuilder: Generate a list of experiments to be executed according to a grid os parameters. The description of each experiment is stored as a dictionary inside the list exported to `experimentsConfig.pickle` by default. This is useful for parallel computing since we can now execute one experiment on each machine and index each one by the position in this list.
+* experimentBuilder: Generate a list of experiments to be executed according to a grid of parameters. The description of each experiment is stored as a dictionary inside the list exported to `experimentsConfig.pickle` by default. This is useful for parallel computing since we can now execute one experiment on each machine and index each one by the position in this list.
 * runExperiments: Load the `experimentsConfig.pickle` file and execute one or several replicas of the model. Can be controlled with script input arguments.
 
 ### Experimental

@@ -163,6 +163,8 @@ class Simulator(AbstractSimulator):
         self.verbose = verbose
         self.events = ListQueue() # here you are passing the scheduler
 
+        self.log = []
+
     def now(self):
         '''
         This methods returns the simulation time
@@ -196,6 +198,7 @@ class Simulator(AbstractSimulator):
             e = self.events.removeFirst()
             if self.verbose:
                 print(secondsToTimestring(e.time), e.message)
+                self.log.append(secondsToTimestring(e.time) + e.message)
 
             # Update simulation time
             self.time = e.time
@@ -209,6 +212,7 @@ class Simulator(AbstractSimulator):
             while chained_event is not None:
                 if self.verbose:
                     print('{:>17}'.format('### Chained:'), chained_event.message)
+                    self.log.append('{:>17}'.format('### Chained:') + chained_event.message)
                 chained_event = chained_event.execute(self)
 
         self.recoverMetrics() 
@@ -239,9 +243,6 @@ class Simulator(AbstractSimulator):
             if self.verbose:
                 print('{:>17}'.format('### Chained:'), chained_event.message)
             chained_event = chained_event.execute(self)
-
-        #for event in to_record_events:
-        #    self.recorder.record(event)
         
         return to_record_events
     
@@ -446,7 +447,10 @@ class StateStatistic(Statistic):
     def sum(self):
         return sum(d[1] for d in self.data)
 
-    def visualize(self, show_mean = True):
+    def visualize(self, show_mean = True, figsize=None):
+        if figsize is not None:
+            fig, ax = plt.subplots(1,1, figsize=figsize)
+
         x = []
         y = []
         for i in range(len(self.data) - 1):

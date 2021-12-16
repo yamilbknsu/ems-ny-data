@@ -9,7 +9,7 @@ from typing import List
 # Internal imports
 from dispatchAnalysis import nearest_neighbor
 
-DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//'         # noqa E501
+DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//Old files//'         # noqa E501
 
 
 def timeBasedRange(candidates, demand, graph, speeds, travel_limit):
@@ -188,6 +188,13 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
     
     with open(save_dir + "demand_borough.pickle", 'wb') as f:
         pickle.dump(demand_borough, f)
+
+    print('Computing graph nodes nearest demand ...')
+    nearest_demand = nearest_neighbor(base_nodes_w_borough, demand_df, 1)
+    graph_to_demand = dict(zip(base_nodes_w_borough['osmid'], [demand_to_node[n] for n in list(nearest_demand['id'])]))
+
+    with open(save_dir + "graph_to_demand.pickle", 'wb') as f:
+        pickle.dump(graph_to_demand, f)
     
     if compute_uber:
         print('Computing uber nodes ...')
@@ -302,27 +309,27 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
 
 if __name__ == "__main__":
     # Load the original candidates and nodes
-    original_candidates = gpd.read_file(DATA_DIR + 'NYC Graph/EMScandidatesMixedLR.geojson')
+    original_candidates = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/EMScandidatesMixedLRNew.geojson')
 
     # Load the nodes of the graph with borough
-    graph_nodes = gpd.read_file(DATA_DIR + 'NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
+    graph_nodes = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
 
     # Load the uniform demand points
-    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform600m/Uniform600mDemand.geojson')
+    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform600m/Uniform600mDemandNew.geojson')
 
     # Load the hospital points
     hospital_df = gpd.read_file(DATA_DIR + 'Generated Shapefiles/NYC_Hospitals/NYC_Hospitals.geojson')
 
     # Load the igraph
-    with open(DATA_DIR + "NYC Graph//NYC_graph_revised.pickle", 'rb') as f:
+    with open("C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph//NYC_graph_revised.pickle", 'rb') as f:
         city_graph = pickle.load(f)
 
     # Load the speeds df
-    speeds = pd.read_csv(DATA_DIR + 'NYC Graph//edge_speeds_vicky.csv')
+    speeds = pd.read_csv('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph//edge_speeds_vicky.csv')
     speeds = speeds.drop('Unnamed: 0', axis=1)
 
     # Sort the df according to city graph order
     speeds.index = speeds['edgeid']
     speeds = speeds.loc[city_graph.es['edgeid'], :]
 
-    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, DATA_DIR + 'Preprocessing Values//HRDemand//')
+    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//Preprocessing Values//Base//')

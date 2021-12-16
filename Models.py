@@ -3,314 +3,15 @@ import time
 import random
 import igraph
 import numpy as np
-import pandas as pd
-import geopandas as gpd
 from collections import defaultdict
-from typing import List, Optional, Callable, Dict, Tuple
+from typing import List, Optional, Dict, Tuple
 
 # Local Imports
 import Events
-import Solvers
+import OnlineSolvers
 import Generators
 import SimulatorBasics as Sim
-
-
-class SimulationParameters:
-    """
-    A SimulationParameters instance is meant to hold all the parameters
-    for the simulation, most of them are constants (like the id's of the)
-    candidate and demand nodes, but there are others that are computed on
-    the fly. For the latter ones, compute functions are provided in this
-    class.
-
-    In a normal setting, you have one instance of this class in order
-    to represent one configuration or replica of the system.
-
-    The main abstractions of the model that are necessary to understand the
-    data structures found here are:
-
-    - Nodes in the graph of NYC are indetified by the osmid attribute, which
-      we pass along as a string.
-    - Similarly, edges of this graph are identified by the edgeid attribute
-      of the spatial object, also referenced here as a string.
-    - Emergency events were divided into High and Low severity groups. This
-      means that demand related parameters are usually divided in two (usually
-      as a list with two elements). High priority is always the index 0.
-    - It's assumed that a working day is divided into time periods with fixed
-      duration, and that there is a distribution describing the average speed
-      of each street for each one. So, all of the parameters that are dependent
-      on this speed, are expected to be a list with as much elements as time periods.
-    - Simulation time is always in seconds.
-    """    
-
-    def __init__(self,
-                 demand_rates: List["pd.DataFrame"],
-                 mean_busytime: List["pd.DataFrame"],
-                 cand_cand_time: List["np.array"],
-                 cand_demand_time: List["np.array"],
-                 hospital_nodes: Dict[int, List[str]],
-                 hospital_borough,
-                 candidate_nodes: List[str],
-                 demand_nodes: List[str],
-                 speeds_df: "pd.DataFrame",
-                 ALS_tours: float,
-                 BLS_tours: float,
-                 neighborhood: List[Dict[str, List[str]]],
-                 neighborhood_candidates: List[Dict[str, List[str]]],
-                 neighbor_k: List[Dict[str, int]],
-                 nodes_with_borough: "gpd.GeoDataFrame",
-                 candidates_borough: Dict[int, List[str]],
-                 demand_borough: Dict[int, List[str]],
-                 reachable_demand: List[Dict[str, List[str]]],
-                 reachable_inverse: List[Dict[str, List[str]]],
-                 uber_nodes: Dict[str, str],
-                 vehicle_shift: Callable = lambda _: 8*3600,
-                 vehicle_arrival_deviation: float = 3600,
-                 is_uber_available: bool = False,
-                 uber_low_severity_ratio: float = .1,
-                 simulation_time: float = 3600,
-                 relocation_optimization: bool = True,
-                 relocation_period: float = 600,
-                 optimization_gap: float = .1,
-                 apply_workload_restriction: bool = True,
-                 time_periods: List[float] = [7, 3, 6, 3, 5],
-                 time_shifts: List[float] = [8,8,8],
-                 vehicle_types: int = 2,
-                 initial_nodes: Optional[List[List[str]]] = None,
-                 overload_penalty: float = 100,
-                 maximum_overload_ALS = .4,
-                 maximum_overload_BLS = .4,
-                 random_seed: float = 420):
-        """
-        A SimulationParameters instance is meant to hold all the parameters
-        for the simulation, most of them are constants (like the id's of the)
-        candidate and demand nodes, but there are others that are computed on
-        the fly. For the latter ones, compute functions are provided in this
-        class.
-
-        In a normal setting, you have one instance of this class in order
-        to represent one configuration or replica of the system.
-
-        Refer to class documentation for some abstrations of the model useful
-        for understanding these data structures.
-
-        In order to facilitate even more the understanding of this parameters,
-        the expected size of the matrices is defined in brackets using this
-        notation:
-
-        C: Number of candidadte Nodes
-        D: Number of demand Nodes
-        T: Number of time periods
-        V: Number of ambulance types
-        S: Number of emergency categories
-        B: Number of Boroughs
-        H: Number of hospital nodes
-
-        Note: This class also holds the value of Q and P, which are matrices computed
-        on the fly and act as parameters for the optimization models. Similarly,
-        the ambulance distribution between borough is approximated using an heuristic
-        that runs on the initialization function of this class.
-
-        Args:
-            demand_rates (List[DataFrame]): [T, S, D] Hourly demand rate for each node
-            mean_busytime (List[DataFrame]): [T, S, D] Mean busy time taken from an ambulance
-                                            attending an emergency coming for each node. This matrix
-                                            is updated during the simulation with simulated values.
-            cand_cand_time (List[numpy.Array]): [T, C, C] Travel time between candidate nodes
-            cand_demand_time (List[numpy.Array]): [T, C, D] Travel time between candidate and demand nodes
-            hospital_nodes (Dict[int, List[str]]): [S: H] Hospitals nodes that can attend emergencies
-                                                          of type S
-            candidate_nodes (List[str]): [C] List of candidate nodes (by osmid)
-            demand_nodes (List[str]): [D] List of demand nodes (by osmid)
-            speeds_df (pd.DataFrame): Dataframe with columns: edgeid and p+'x'+n for x in range(1,T) 
-
-            TODO: FIX THIS
-            n_vehicles (List[List[int]]): [T, V] Number of ambulances of each type available for
-                                                 each time period
-            ambulance_distribution (List[List[int]]): The amount of ambulances of each type at each borough. 
-                                                      The sum should be equal to the values at n_vehicles.
-
-
-
-            neighborhood (List[Dict[str, List[str]]]): [C: ?] List of demand nodes inside the neighborhood
-                                                              of each candidate node
-            neighborhood_candidates (List[Dict[str, List[str]]]): [C: ?] List of candidate nodes sharing the neighborhood
-                                                                         of each candidate node
-            neighbor_k (List[Dict[str, int]]): [C: 1] Number of demand points inside the neighborhood of each candidate node
-            nodes_with_borough (gpd.GeoDataFrame): [D rows] Dataframe with spatial info of each demand node and a column with
-                                                            its corresponding borough (this is the only column used in the model
-                                                            but it was the most direct way of include it)
-            candidates_borough (Dict[int, List[str]]): [B: ?] List of candidate nodes in each borough
-            demand_borough (Dict[int, List[str]]): [B: ?] List of demand nodes in each borough
-            reachable_demand (List[Dict[str, List[str]]]): [C: ?] List of reachable demand nodes for each candidate node in less
-                                                                  than 8 minutes
-            reachable_inverse (List[Dict[str, List[str]]]): [D: ?] List of candidate nodes that are able to reach each demand node
-                                                                   in less than 8 minutes
-            uber_nodes (Dict[str, str]): A dict with each node on the graph as a key and the node where a uber might appear
-                                         if an emergency calls one from the key node as value of the dict.
-            is_uber_available (bool, optional): Whether or not ride handling services is available for a percentage of
-                                              non life-thretening non urgen calls. Defaults to False.
-            uber_low_severity_ratio (float, optional): The percentage of non lifethretening non urgent calls to be
-                                                       assigned to an uber trip. Defaults to 0.1.
-            simulation_time (float, optional): Time limit for the simulation .Defaults to 3600.
-            relocation_optimization (bool, optional): Whether or not to perform online relocation. Defaults to True.
-            relocation_period (float, optional): Time in seconds between each relocation process. Defaults to 600.
-            optimization_gap (float, optional): MIPGap parameter for gurobi solver. Defaults to .1
-            apply_workload_restriction (bool, optional): Whether or not to apply workload restrictions in the
-                                                         optimization process. Defaults to True.
-            time_periods (List[float], optional): [T] Duration in hours of each time period. Defaults to [7, 3, 6, 3, 5].
-            time_shifts (List[float], optional): [T] Duration in hours of each work shift. Defaults to [8, 8, 8].
-            vehicle_types (int, optional): Number of vehicle types. Defaults to 2.
-            initial_nodes (List[List[str]], optional): [V, ?] Initial nodes for  the ambulances. Defaults to None.
-            overload_penalty (float, optional): Penalty parameter for relocation overload exceeding Defaults to 1000.
-            maximum_overload_ALS (float, optional): Fraction of the time periods that an ALS vehicle is allowed
-                                                    spend on relocation. Defaults to .5.
-            maximum_overload_BLS (float, optional): Fraction of the time periods that an BLS vehicle is allowed
-                                                    spend on relocation. Defaults to .5.
-            random_seed (float, optional): Seed for random generator. Defaults to 420.
-        """
-
-        # General parameters
-        self.simulation_time = simulation_time
-        self.relocation_optimization = relocation_optimization
-        self.relocation_period = relocation_period
-        self.optimization_gap = optimization_gap
-        self.apply_workload_restriction = apply_workload_restriction
-        self.time_periods = time_periods
-        self.time_shifts = time_shifts
-        self.vehicle_types = vehicle_types
-        self.ALS_tours = ALS_tours
-        self.BLS_tours = BLS_tours
-        self.vehicle_shift = vehicle_shift
-        self.vehicle_arrival_deviation = vehicle_arrival_deviation
-        self.initial_nodes = initial_nodes
-        self.hospital_nodes = hospital_nodes
-        self.hospital_borough = hospital_borough
-        self.random_seed = random_seed
-
-        # Routing parameters
-        self.speeds_df = speeds_df
-        self.candidate_nodes = candidate_nodes
-        self.demand_nodes = demand_nodes
-        self.demand_rates = demand_rates
-        self.mean_busytime = mean_busytime
-        self.cand_cand_time = cand_cand_time
-        self.cand_demand_time = cand_demand_time
-        self.neighborhood = neighborhood
-        self.neighborhood_candidates = neighborhood_candidates
-        self.neighbor_k = neighbor_k
-        self.candidates_borough = candidates_borough
-        self.demand_borough = demand_borough
-        self.reachable_demand = reachable_demand
-        self.reachable_inverse = reachable_inverse
-        self.uber_nodes = uber_nodes
-        self.is_uber_available = is_uber_available
-        self.uber_low_severity_ratio = uber_low_severity_ratio
-        self.nodes_with_borough = nodes_with_borough
-
-        # Hyper-Parameters
-        self.overload_penalty = overload_penalty
-        self.maximum_overload_ALS = maximum_overload_ALS
-        self.maximum_overload_BLS = maximum_overload_BLS
-
-        # Set the RNG seed
-        np.random.seed(self.random_seed)
-        random.seed(self.random_seed)
-
-        # Initialization of some parameters
-        # ---------------------------------
-
-        # It was necessary to acknowledge the fact that the borough 0 exists (those points outside the border)
-        # So it's set to be those nodes that don't fit inside any other borough
-        candidates_with_borough = candidates_borough[1] + candidates_borough[2] + candidates_borough[3] + \
-                                  candidates_borough[4] + candidates_borough[5]
-        self.candidates_borough[0] = list(set(candidate_nodes) - set(candidates_with_borough))
-
-        # Initialize Q and P matrices
-        self.computeQandP(0)
-
-        # Compute ambulance distribution
-        ALS_temporal_demand_factor = np.array([np.sum(self.demand_rates[0].loc[t, :]) for t in range(1, 1 + len(time_periods))])
-        ALS_temporal_demand_factor /= np.sum(ALS_temporal_demand_factor)
-        BLS_temporal_demand_factor = np.array([np.sum(self.demand_rates[1].loc[t, :]) for t in range(1, 1 + len(time_periods))])
-        BLS_temporal_demand_factor /= np.sum(BLS_temporal_demand_factor)
-
-        cumulative_time_periods = [sum(self.time_periods[:l+1]) for l in range(len(self.time_periods))]
-        cumulative_time_shifts = [sum(self.time_shifts[:l+1]) for l in range(len(self.time_shifts))]
-
-        used_hours = np.zeros(len(self.time_periods))
-        ALS_final_temporal_factor = []
-        BLS_final_temporal_factor = []
-        for ts in cumulative_time_shifts:
-            i = 0
-            for tp in cumulative_time_periods:
-                if tp >= ts:
-                    break
-                i += 1
-            factor = np.array([np.clip((ts - sum(self.time_periods[:j]))/self.time_periods[j], a_min=0, a_max=1) if j <= i else 0 for j in range(len(self.time_periods))]) - used_hours
-
-            ALS_final_temporal_factor.append(sum(ALS_temporal_demand_factor * factor))
-            BLS_final_temporal_factor.append(sum(BLS_temporal_demand_factor * factor))
-
-            used_hours += factor
-
-        ALS_temporal_distribution = np.trunc(ALS_tours * np.array(ALS_final_temporal_factor))
-        BLS_temporal_distribution = np.trunc(BLS_tours * np.array(BLS_final_temporal_factor))
-
-        borough_demand = np.array([np.sum(self.demand_rates[0][d][1] for d in demand_borough[b]) for b in range(1,6)])
-        borough_demand = borough_demand/np.sum(borough_demand)
-
-        # Allocate the ambulances to each borough each time shift
-        self.ambulance_distribution = [[np.round(ALS_temporal_distribution[t]*borough_demand), np.round(BLS_temporal_distribution[t]*borough_demand)] for t in range(len(time_shifts))]
-        
-        #self.ambulance_distribution = [[0, 70, 74, 89, 65, 14],
-        #                               [0, 114, 126, 140, 105, 20]]
-
-    def getSpeedList(self, time_period: int):
-        """
-        Get the list of the speeds for each edge on the graph
-        for the corresponding time period, in the requested order.
-
-        Args:
-            time_period (int): Index of the time period (0-indexed)
-
-        Returns:
-            (list): list of speeds (in meters/second)
-        """
-        return list(self.speeds_df['p' + str(time_period+1) + 'n'])
-
-    def computeQandP(self, t):
-        """
-        Compute Q and P matrices for time period t, which are parameters
-        for the optimization process.
-
-        They are computed as:
-
-        Q_ij = max(0, 1 - (sum(demand_rate[i]*mean_busy_time[i] for i in demand_nodes)/ k) ** k)
-
-        (The only difference between Q and P is that Q is only considering high severity demand,
-         while P considers only low severity demand)
-         
-        Args:
-            t (int): Time period
-        """
-        neighbor_k = self.neighbor_k
-        neighborhood = self.neighborhood
-        D_rates = self.demand_rates
-        Busy_rates = self.mean_busytime
-        C = self.candidate_nodes
-
-        self.Q = np.array([[np.sum(D_rates[0].loc[t+1, neighborhood[t][j]] * 
-                                        Busy_rates[0].loc[t+1, neighborhood[t][j]]) for j in C]]).T
-        self.Q = self.Q @ np.array([[1/k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)]])
-        self.Q = 1-np.power(self.Q, [k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)])
-        self.Q[self.Q < 0] = 0
-
-        self.P = np.array([[np.sum(D_rates[0].loc[t+1, neighborhood[t][j]] * 
-                                        Busy_rates[0].loc[t+1, neighborhood[t][j]]) for j in C]]).T
-        self.P = self.P @ np.array([[1/k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)]])
-        self.P = 1-np.power(self.P, [k if k > 0 else 0 for k in range(max(neighbor_k[t].values())+1)])
-        self.P[self.P < 0] = 0
+from SimulationParameters import SimulationParameters
 
 
 class Vehicle(Sim.SimulationEntity):
@@ -318,29 +19,41 @@ class Vehicle(Sim.SimulationEntity):
     Object representing a vechicle that can move through a graph.
     This object holds information about the current state of the vehicle.
     This includes, among other things, the list of edge elements that
-    are part of the actual route, a reference to an emergency instance
-    if attending any and the actual position of the vehicle.
+    are part of the actual route, a reference to an emergency instance,
+    if attending any, and the actual position of the vehicle on the graph.
 
 
-    In principle we could then extend this class to an ambulance class
+    In principle we could then extend this class to an ambulance-like class
     but since there won't be any other kind of vehicles in the model,
     We'll just take this as a synonym for ambulance.
 
     Properties of the class:
-    
+
     patient (Emergency, optional): Emergency object of the actual patient
+    type (int): Ambulance type (0: ALS, 1: BLS, 3: RHS)
+    borough (int): Which of the 5 boroughs this ambulance is assigned to serve
+    isUber (bool): Whether or not this vehicle is RHS (TODO: redundant)
+    shift (int): Number of shift this ambulance is assigned.
+    arrive_in_system (float): Time at which the ambulance arrived to the system
+    record: List of all the activities this ambulance has performed, including
+            relocation and providing attention.
+    cleaning (bool): Whether this ambulance is currently being cleaned
+    leaving (bool): Whether this ambulance is leaving the system once it becomes idle.
     """
 
     def __init__(self,
                  start_node: str,
                  vehicle_type: int,
+                 arrive_in_system: float,
                  borough: int,
                  uber: bool = False,
+                 shift: int = 0,
                  name: str = None):
         """
         Args:
             start_node (str): Starting node for the ambulance.
             vehicle_type (int): int describing which type of vehicle this is (ALS: 0, BLS: 1).
+            arrive_in_system (float): Time at which the ambulance arrived to the system
             borough (int): Borough to which this vehicle belongs to.
             name (str, optional): [description]. Defaults to None.
         """
@@ -349,61 +62,96 @@ class Vehicle(Sim.SimulationEntity):
         self.type = vehicle_type
         self.borough = borough
         self.isUber = uber
+        self.shift = shift
+        self.arrive_in_system = arrive_in_system
+
+        # This is a record of all the movement an ambulance has performed
+        # Each element is a tuple with the form:
+        # (time, from_node, to_node, emergency, emergency severity, hospital)
+        self.record: List[Tuple] = []
 
         self.stopMoving()                   # Though obviously is not
         self.path: List[int] = []
         self.node_path: List[str] = []
-        self.expected_arrival: float = 0    # Expected arrival time to next node    
+        self.expected_arrival: float = 0    # Expected arrival time to next node
         self.teleportToNode(start_node)
         self.cleaning: bool = False
         self.leaving: bool = False
+        #self.station_changed: bool = False
 
         # The time spent repositioning
+        self.accumulated_relocation: float = 0
         self.reposition_workload: float = 0
+        self.total_busy_time: float = 0
         self.station = start_node
         self.arrival_time = 0
+        self.relocating: bool = False
+        self.can_relocate: bool = True
 
-        # Statistics
+        # Statistics definition
         self.statistics: Dict[str, Sim.Statistic] = {}
 
-        self.statistics['RelocationTime'] = Sim.StateStatistic('RelcationTime{}'.format(self.name))             # At start moving event and change shift
+        self.statistics['RelocationTime'] = Sim.StateStatistic('RelcationTime{}'.format(self.name))
         self.statistics['MetersDriven'] = Sim.StateStatistic('MetersDriven{}'.format(self.name))
-        self.statistics['EmergenciesServed'] = Sim.CounterStatistic('EmergenciesServed{}'.format(self.name))    # At emergency leaving event
+        self.statistics['EmergenciesServed'] = Sim.CounterStatistic('EmergenciesServed{}'.format(self.name))
         self.statistics['State'] = Sim.StateStatistic('VehicleState{}'.format(self.name))
         self.statistics['TimeInSystem'] = Sim.CounterStatistic('TimeInSystem{}'.format(self.name))
+        self.statistics['ArriveInSystem'] = Sim.CounterStatistic('ArriveInSystem{}'.format(self.name))
+        self.statistics['ArriveInSystem'].record(arrive_in_system)
+        self.statistics['Shift'] = Sim.CounterStatistic('AmbulanceShift{}'.format(self.name))
+        self.statistics['Shift'].record(self.shift)
+        self.statistics['Borough'] = Sim.CounterStatistic('AmbulanceBorough{}'.format(self.name))
+        self.statistics['Borough'].record(self.borough)
+        self.statistics['Type'] = Sim.CounterStatistic('AmbulanceType{}'.format(self.name))
+        self.statistics['Type'].record(self.type)
+        self.statistics['BusyWorkload'] = Sim.StateStatistic('BusyWorkload{}'.format(self.name))
+        self.statistics['AccumulatedWorkload'] = Sim.StateStatistic('AccumulatedWorkload{}'.format(self.name))
 
         # State posibilities
         # 0: Idle                   @ Ambulance end trip event and Ambulance end cleaning
         # 1: Repositioning          @ Ambulance start moving event
         # 2: Attending              @ Assigned event
-        
-        # This is a record of all the movement an ambulance has
-        # Each element is a tuple with the form:
-        # (time, from_node, to_node, emergency, emergency severity, hospital)
-        self.record: List[Tuple] = []
 
     def teleportToNode(self, node: str):
         """
         Use Odin's powers to teleport this vehicle to a
-        given node in the graph
+        given node in the graph.
+
+        NOTE:
+        This should only be used at the beggining of the simulation as the movement
+        will automatically be recorded as happening at time 0.
         """
         self.pos = node
         self.onArrivalToNode(node)
 
+        # Save a record of the trip
+        self.record.append((0, self.pos, node, str(self.patient),
+                            self.patient.hospital if self.patient is not None else None))
+
     def stopMoving(self):
+        """
+        This function is kept in case further action were to take place
+        or statistics were to be collected whenever the vehicle stops moving.
+        """
         self.moving: bool = False
 
     def onArrivalToNode(self, node: str) -> bool:
         """
         Function to be called when the vehicle arrives to a node.
+        The information about the optimal path stored in the object
+        is used to determine where to move next and whether or not
+        the trip is over.
 
         Returns a bool -> Whether or not this node was the end of
                           the vehicle's journey
         """
+
+        # Update logistic state
         self.pos = node
         self.actual_edge: Optional[int] = None
         self.from_node: str = node
 
+        # Check for future movement
         if len(self.node_path) > 0:
             self.to_node: str = self.node_path.pop(0)
             self.actual_edge = self.path.pop(0)
@@ -412,30 +160,44 @@ class Vehicle(Sim.SimulationEntity):
             self.to_node = node
             self.stopMoving()
             return True
-    
+
     def onMovingToNextNode(self,
                            expected_arrival: float):
+        """
+        This function is kept in case further action were to take place
+        or statistics were to be collected whenever the vehicle starts moving.
+        """
         self.moving = True
         self.expected_arrival = expected_arrival
-    
+
     def onAssignedToEmergency(self,
                               patient: "Emergency",
                               path: List[int],
                               node_path: List[str]):
+        """
+        This function is kept in case further action were to take place
+        or statistics were to be collected whenever the vehicle is assigned to an emergency.
+        """
         self.patient = patient
         self.onAssignedMovement(path, node_path)
-    
+
     def onAssignedMovement(self,
                            path: List[int],
                            node_path: List[str]):
+        """
+        This function is kept in case further action were to take place
+        or statistics were to be collected whenever the vehicle is assigned to move.
+        """
         self.path = path
         self.node_path = node_path
 
     def onPathEnded(self) -> int:
         """
+        Called when the path has been completed.
+
         Returns a status:
         0 : Means nothing is expected of the ambulance
-            after this, do an assignment
+            after this, do an assignment step
         1 : Means arrived to attend an emergency to the
             location of the incident, schedule a FinishAttending
             event
@@ -450,53 +212,74 @@ class Vehicle(Sim.SimulationEntity):
                 self.patient.onVehicleArrive(self)
                 return 1
             elif self.patient.status == 3:
-                # self.patient.markStatus(3)
                 return 2
-        
+
         return 0
 
 
 class EMSModel(Sim.Simulator):
+    """
+    Main class of the simulation model.
+    Here, the main state of the system is stored, as well as
+    references to all the vehicles and emergencies in the system and simulation and optimization
+    parameters.
+
+    A simulation experiment is excuted by instancing this class with all the required parameters
+    (initial setup is performed during this initialization) and calling the run function which then
+    starts executing the events in the queue until there are no left or the simulation clock has
+    passed the stipulated limit.
+
+    Given the global scope of this class, the current instance being used is passed alongside each event
+    during its execution, in order to provide context to all the events.
+    """
 
     def __init__(self,
                  city_graph: igraph.Graph,
                  generator_object: Generators.ArrivalGenerator,
-                 dispatcher: Solvers.DispatcherModel,
-                 repositioner: Solvers.RelocationModel,
+                 optimizer: OnlineSolvers.RelocationModel,
                  parameters: SimulationParameters,
                  **kwargs):
+        """
+        Args:
+            city_graph (Graph): An iGraph  object that represents the road network of the city. This is going
+                                to be used to compute the shortest distances and paths when routing the ambulances
+            generator_object (ArrivalGenerator): Object extending the ArrivalGenerator class that produces emergencies
+                                arrivals to the system.
+            optimizer (RelocationModel): Object extending the RelocationModel class that is used to optimize the relocation,
+                                redeployment and dispatching of available ambulances.
+            parameters (SimulationParameters): Instance of the SimilationParameter class containing all the simulation and
+                                optimization parameters needed for the model to run.
+        """
 
         super().__init__(**kwargs)
 
+        # Object definition
         self.city_graph: igraph.Graph = city_graph
         self.generator_object: Generators.ArrivalGenerator = generator_object
-        self.assigner: Solvers.DispatcherModel = dispatcher
-        self.repositioner: Solvers.RelocationModel = repositioner
+        self.optimizer: OnlineSolvers.RelocationModel = optimizer
         self.arrival_generator = self.generator_object.generator(self)
-
         self.parameters = parameters
+
+        # Hospital nodes
         self.hospitals: Dict[int, List[str]] = parameters.hospital_nodes
 
-        
         # State variables
         # ---------------
-        # The last reposition status
-        self.ambulance_stations: Dict[int, List[List[str]]] = {}
+        # The last reposition status TODO: I think is not used
+        # self.ambulance_stations: Dict[int, Dict[int, List[str]]] = {b: {s: [] for s in range(0, 1)} for b in range(1, 6)}
 
-        # The amount of uber calls used
+        # The amount of uber calls and uber seconds used
         self.uber_calls = 0
-
-        # Covering state, useful for preparedness
-        self.covering_state: Dict[int, Dict[Vehicle, Tuple[str, List[float]]]] = {}
+        self.uber_seconds = 0
 
         # A record of the time spent on an emergency on a specific node
         # (time_period, severity, node) = [times]
         self.time_records: Dict[Tuple[int, int, str], List[float]] = defaultdict(list)
 
-
         # Initialization processes
         # ------------------------
-        # Randomly initialize initial positions for ambulances if needed
+        # Randomly initialize initial positions for ambulances inside
+        # the corresponding borough if needed
         if parameters.initial_nodes is None:
             n: int = self.city_graph.vcount()
             parameters.initial_nodes = []
@@ -516,87 +299,34 @@ class EMSModel(Sim.Simulator):
         for v in range(parameters.vehicle_types):
             assert len(parameters.initial_nodes[v]) == int(sum(parameters.ambulance_distribution[0][v]))
 
+        # Initialize vehicle arrivals
+        self.InitializeVehicles(self.parameters)
 
-        self.n_vehicles = 0
-        for v in range(parameters.vehicle_types):
-            cumulative_distribution = np.cumsum(parameters.ambulance_distribution[0][v])
-            b = 1
-            i = 0
-
-            for m in range(int(sum(parameters.ambulance_distribution[0][v]))):
-                # Compute the corresponding borough
-                if i == int(cumulative_distribution[b-1]):
-                    b += 1
-                    
-                self.insert(Events.AmbulanceArrivalEvent(self, 0, parameters.initial_nodes[v][m],           
-                            Vehicle(parameters.initial_nodes[v][m], v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.random.random()*parameters.vehicle_arrival_deviation/2))             
-                self.n_vehicles += 1
-                i += 1
-
-        cumu_shifts = np.cumsum(parameters.time_shifts)
-        for t, distribution in enumerate(parameters.ambulance_distribution[1:]):
-            for v in range(parameters.vehicle_types):
-                cumulative_distribution = np.cumsum(distribution[v])
-                b = 1
-                i = 0
-
-                for m in range(int(sum(distribution[v]))):
-                    # Compute the corresponding borough
-                    if i == int(cumulative_distribution[b-1]):
-                        b += 1
-
-                    arrival_time = cumu_shifts[t]*3600 + np.random.random()*parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation/2
-                    hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
-                    self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,           
-                                Vehicle(hospital_node, v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))             
-                    self.n_vehicles += 1
-                    i += 1
-        
-        day_offset = 24*3600
-        cumu_shifts = np.cumsum(parameters.time_shifts) - 8
-        for t, distribution in enumerate(parameters.ambulance_distribution):
-            for v in range(parameters.vehicle_types):
-                cumulative_distribution = np.cumsum(distribution[v])
-                b = 1
-                i = 0
-
-                for m in range(int(sum(distribution[v]))):
-                    # Compute the corresponding borough
-                    if i == int(cumulative_distribution[b-1]):
-                        b += 1
-
-                    arrival_time = cumu_shifts[t]*3600 + np.random.random()*parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation/2 + day_offset
-                    hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
-                    self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,           
-                                Vehicle(hospital_node, v, b, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))             
-                    self.n_vehicles += 1
-                    i += 1
-        
         # Schedule the ambulance setting event
         self.insert(Events.HospitalSettingEvent(self, 0))
 
         # Schedule the starting positions event
-        self.insert(Events.InitialPositioningEvent(self, 0.1))
+        self.insert(Events.InitialPositioningEvent(self, .1))
 
         # Lists representing the state of the model
-        self.activeEmergencies: List[Emergency] = list()        # All the emergencies in the system         
+        self.activeEmergencies: List[Emergency] = list()        # All the emergencies in the system
         self.assignedEmergencies: List[Emergency] = list()      # Those which have been assigned
 
-        self.assignedNotArrived: int = 0          
+        # Number of emergencies in the system that have been
+        # assigned an ambulance but this has not yet arrived
+        self.assignedNotArrived: int = 0
 
         # Schedule the first arrival
         self.insert(next(self.arrival_generator))
 
-        # Schedule the initializer of the time period change
-        #self.insert(Events.ShiftChangeEvent(self, 0))
-
-        # Schedule the first compute Q and P event
-        self.insert(Events.ComputeQandPEvent(self, 3600))
+        # Schedule the first event that uptades the busytime parameters
+        self.insert(Events.ComputeParemeters(self, 3600))
 
         # Initialize model Statistics
         self.statistics: Dict[str, Sim.Statistic] = {}
         self.vehicle_statistics: Dict[str, Dict] = {}
 
+        # The comment next to each definition explains where this statistic is updated in the code
         for b in range(1, 6):
             self.statistics['OptimizationSizeALS' + str(b)] = Sim.TimedTallyStatistic('OptimizationSizeALS' + str(b))   # @ solver execution
             self.statistics['OptimizationTimeALS' + str(b)] = Sim.TimedTallyStatistic('OptimizationTimeALS' + str(b))   # @ solver execution
@@ -638,67 +368,161 @@ class EMSModel(Sim.Simulator):
         self.statistics['SpatialHS8minCover'] = Sim.SpatialStatistic('SpatialHS8minCover')              # @ Ambulance end trip event
         self.statistics['SpatialHS7minCover'] = Sim.SpatialStatistic('SpatialHS7minCover')              # @ Ambulance end trip event
 
-        self.statistics['SpatialHSAverageResponseTime'] = Sim.SpatialStatistic('SpatialHSAverageResponseTime')            # @ Ambulance end trip event        
-        self.statistics['SpatialLSAverageResponseTime'] = Sim.SpatialStatistic('SpatialLSAverageResponseTime')            # @ Ambulance end trip event       
-        self.statistics['SpatialGeneralAverageResponseTime'] = Sim.SpatialStatistic('SpatialGeneralAverageResponseTime')  # @ Ambulance end trip event      
+        self.statistics['SpatialHSAverageResponseTime'] = Sim.SpatialStatistic('SpatialHSAverageResponseTime')            # @ Ambulance end trip event
+        self.statistics['SpatialLSAverageResponseTime'] = Sim.SpatialStatistic('SpatialLSAverageResponseTime')            # @ Ambulance end trip event
+        self.statistics['SpatialGeneralAverageResponseTime'] = Sim.SpatialStatistic('SpatialGeneralAverageResponseTime')  # @ Ambulance end trip event
 
         self.statistics['SpatialALSRelocation'] = Sim.SpatialStatistic('SpatialALSRelocation')          # @ Relocation Event
         self.statistics['SpatialBLSRelocation'] = Sim.SpatialStatistic('SpatialBLSRelocation')          # @ Relocation Event
-
-        self.sim_start_time = time.time()
         self.statistics['RunTime'] = Sim.CounterStatistic('RunTime')                                    # @ End Simulation event
-
-        self.statistics['GAPALSPart1'] = Sim.TimedTallyStatistic('GAPALSPart1')                         # @ Solver relocate
-        self.statistics['GAPALSPart2'] = Sim.TimedTallyStatistic('GAPALSPart2')                         # @ Solver relocate
-        self.statistics['GAPBLSPart1'] = Sim.TimedTallyStatistic('GAPBLSPart1')                         # @ Solver relocate
-        self.statistics['GAPBLSPart2'] = Sim.TimedTallyStatistic('GAPBLSPart2')                         # @ Solver relocate
-
         self.statistics['EmergenciesWaiting'] = Sim.StateStatistic('EmergenciesWaiting')
 
+        self.sim_start_time = time.time()
+
         # Tuples of the form
-        # (emergency name, node, severity, arrival time, attending time, to_hospital_time, disposition code, hospital)
+        # (emergency name, node, severity, arrival time, attending time, to_hospital_time, disposition code, hospital, vehicle)
         self.emergencyRecord: List[Tuple] = []
 
     def run(self,
             simulation_time: int = 3600):
+        """
+        Starts the execution of the simulation model, which will continue until no events are
+        left or the simulation time has exceeded the stipulated limit.
+        """
+
+        # Add Enf of simulation event
         if self.parameters.simulation_time is not None:
             self.insert(Events.EndSimulationEvent(self,
-                                                  self.parameters.simulation_time))                         
+                                                  self.parameters.simulation_time))
         else:
             self.insert(Events.EndSimulationEvent(self, simulation_time))
+        
+        # Start the model
         self.doAllEvents()
 
         return self.getStatistics()
 
+    def InitializeVehicles(self, parameters):
+        """
+        Initialize the vehicle objects and schedule their arrival to the system
+        based on the input parameters and the ambulance tour distribution computed during parameter
+        initialization.
+
+        What is really going on in this code, is that for the first shift of the first day of simulation,
+        we use the initial nodes that were passed as an input parameter to the model or were randomly assigned.
+        Then, for the rest of the shifts, we randomly select an hospital for each arrival.
+
+        NOTE:
+        This NEEDS to be reviewed if you are using a scheme for the shifts other than the 8-hour shift used in our model.
+        """
+        self.n_vehicles = 0
+
+        # First shift of first day
+        for v in range(parameters.vehicle_types):
+            cumulative_distribution = np.cumsum(parameters.ambulance_distribution[0][v])
+            b = 1
+            i = 0
+
+            for m in range(int(sum(parameters.ambulance_distribution[0][v]))):
+                # Compute the corresponding borough
+                if i == int(cumulative_distribution[b - 1]):
+                    b += 1
+
+                self.insert(Events.AmbulanceArrivalEvent(self, 0, parameters.initial_nodes[v][m],
+                            Vehicle(parameters.initial_nodes[v][m], v, arrive_in_system=0, borough=b, shift=1, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.random.random() * parameters.vehicle_arrival_deviation / 2))
+                self.n_vehicles += 1
+                i += 1
+
+        # Rest of the shifts of the first day
+        cumu_shifts = np.cumsum(parameters.time_shifts)
+        for t, distribution in enumerate(parameters.ambulance_distribution[1:]):
+            for v in range(parameters.vehicle_types):
+                cumulative_distribution = np.cumsum(distribution[v])
+                b = 1
+                i = 0
+
+                for m in range(int(sum(distribution[v]))):
+                    # Compute the corresponding borough
+                    if i == int(cumulative_distribution[b - 1]):
+                        b += 1
+
+                    arrival_time = cumu_shifts[t] * 3600 + np.random.random() * parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation / 2
+                    hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
+                    self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,
+                                Vehicle(hospital_node, v, arrive_in_system=np.clip(arrival_time, 0, np.inf), borough=b, shift=t + 2, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))
+                    self.n_vehicles += 1
+                    i += 1
+
+        # The rest of the days (Assuming the same amount of ambulance tours)
+        n_days = int(np.clip((parameters.simulation_time // (3600 * 24)), 0, np.inf))
+        for d in range(1, n_days):
+            day_offset = int(24 * 3600 * d)
+            cumu_shifts = np.cumsum(parameters.time_shifts) - 8
+            for t, distribution in enumerate(parameters.ambulance_distribution):
+                for v in range(parameters.vehicle_types):
+                    cumulative_distribution = np.cumsum(distribution[v])
+                    b = 1
+                    i = 0
+
+                    for m in range(int(sum(distribution[v]))):
+                        # Compute the corresponding borough
+                        if i == int(cumulative_distribution[b - 1]):
+                            b += 1
+
+                        arrival_time = cumu_shifts[t] * 3600 + np.random.random() * parameters.vehicle_arrival_deviation - parameters.vehicle_arrival_deviation / 2 + day_offset
+                        hospital_node = random.choice([hospital for hospital in parameters.hospital_borough if parameters.hospital_borough[hospital] == b])
+                        self.insert(Events.AmbulanceArrivalEvent(self, np.clip(arrival_time, 0, np.inf), hospital_node,
+                                    Vehicle(hospital_node, v, arrive_in_system=np.clip(arrival_time, 0, np.inf), borough=b, shift=4, uber=False, name='Ambulance ' + str(self.n_vehicles)), prior_worked_time=np.clip(-arrival_time, 0, np.inf)))
+                        self.n_vehicles += 1
+                        i += 1
+
     def getAvaliableVehicles(self, v_type: Optional[int] = None, borough: Optional[int] = None) -> List[Vehicle]:
+        """
+        Returns a list with the available vehicles, that is, vehicles that have no emergency assigned and are not being cleaned.
+        If values of v_type or borough are passed, they are used to filter the list.
+        """
         to_check_vehicles = self.vehicles
         if borough is not None:
-            to_check_vehicles = [v for v in self.vehicles if v.borough == borough] 
+            to_check_vehicles = [v for v in self.vehicles if v.borough == borough]
         if v_type is not None:
-            return [v for v in to_check_vehicles if v.patient is None and not v.cleaning and v.type == v_type] 
+            return [v for v in to_check_vehicles if v.patient is None and not v.cleaning and v.type == v_type]
         else:
             return [v for v in to_check_vehicles if v.patient is None and not v.cleaning]
-    
-    def newUberVehicle(self, from_node, borough = None):
+
+    def getUnassignedEmergencies(self, severity: int, borough: int):
+        """
+        Returns the list of emergencies in the systems that have noot been assigned an ambulance.
+        """
+        return [e for e in self.activeEmergencies if e.severity == severity and e.borough == borough and e not in self.assignedEmergencies]
+
+    def newUberVehicle(self, from_node, borough=None):
+        """
+        Generates a new RHS vehicle, inserts it into the system and returns the object.
+        """
         if borough is None:
             print("Warning: borough detection not implemented")
-        
+
         self.uber_calls += 1
-        uber = Vehicle(from_node, 3, borough, uber=True, name="Uber {}".format(self.uber_calls))
+        uber = Vehicle(from_node, 3, arrive_in_system=self.now(), borough=borough, uber=True, name="Uber {}".format(self.uber_calls))
         self.ubers.append(uber)
-        
+
         return uber
 
     def getHospitalType(self, emergency: "Emergency") -> int:
+        """
+        Auxliary function that implements the mapping of an emergency to the type of hospital
+        required.
+        In our case, there was only one type of hospital so the function only returns a value indicating
+        whether this emergency has to be translated to a hospital or not.
+        """
         if emergency.disposition_code in [82, 94]:
             return 1
         else:
             return 0
 
-    def getShortestPath(self, from_nodes, to_nodes, weights = None) -> List[List[int]]:
+    def getShortestPath(self, from_nodes, to_nodes, weights=None) -> List[List[int]]:
         """
-        Function to obtain the shortest paths based on the speed
-        at the time of the simulation
+        Function to obtain the shortest paths based on time-dependent congestion.
         """
         if weights is None:
             weights = self.city_graph.es['length'] / np.array(self.parameters.getSpeedList(self.timePeriod()))
@@ -707,54 +531,14 @@ class EMSModel(Sim.Simulator):
                                                   weights=weights,
                                                   output='epath')
 
-    def getShortestDistances(self, from_nodes, to_node, weights = None) -> np.array:
+    def getShortestDistances(self, from_nodes, to_node, weights=None) -> np.array:
+        """
+        Function to obtain the shortest distances based on time-dependent congestion.
+        """
         if weights is None:
             weights = self.city_graph.es['length'] / np.array(self.parameters.getSpeedList(self.timePeriod()))
 
-        return np.array(self.city_graph.shortest_paths(from_nodes, to_node, weights=weights))              
-
-    def computeSystemPreparedness(self,
-                                  borough,
-                                  vehicle_positions: Optional[List[List[str]]] = None,
-                                  travel_matrix: Optional[np.array] = None):
-        """
-        Expecting a list of lists, containing a list of nodes for each vehicle type
-        Will use simulator.parameters for calculations
-        """
-
-        if travel_matrix is None:
-
-            if vehicle_positions is None:
-                vehicle_positions = [[ambulance.to_node
-                                    for ambulance in self.getAvaliableVehicles(v_type=v, borough=borough)]                     
-                                    for v in range(self.parameters.vehicle_types)]
-
-            travel_matrix = [self.getShortestPath(vehicle_positions[v],
-                                                  self.parameters.demand_borough[borough])
-                                 for v in range(self.parameters.vehicle_types)]
-
-        # Emergencies per hour per demand node
-        demand_rates = np.array([self.parameters.demand_rates[0].loc[self.timePeriod()+1, self.parameters.demand_borough[borough]],
-                                 self.parameters.demand_rates[1].loc[self.timePeriod()+1, self.parameters.demand_borough[borough]]])
-        # Mean time per emergency per demand node
-        busytime_means = np.array([self.parameters.mean_busytime[0].loc[self.timePeriod()+1, self.parameters.demand_borough[borough]],
-                                   self.parameters.mean_busytime[1].loc[self.timePeriod()+1, self.parameters.demand_borough[borough]]])
-
-        # Ponderation of each type of emergency at each demand node
-        demand_ratios = demand_rates/np.where(np.sum(demand_rates, axis = 0) == 0, 1, np.sum(demand_rates, axis = 0))
-
-        # Compute the amount of vehicles available per node per emergency level
-        valid_indexes = [np.where(np.array(travel_matrix[0]) < 8*60), np.where(np.array(travel_matrix[1]) < 8*60)]
-        number_available = np.array([[len(np.where(valid_indexes[v][0] == i)[0]) if len(np.where(valid_indexes[v][0] == i)[0]) > 0 else 1e-10
-                                     for i in range(len(self.parameters.demand_borough[borough]))]
-                                     for v in range(self.parameters.vehicle_types)])
-
-        # Compute final preparedness
-        preparedness = 1 - np.sum((demand_ratios * demand_rates * busytime_means)/number_available, axis = 0)
-        preparedness[preparedness < 0] = 0
-
-        return np.sum(preparedness)
-
+        return np.array(self.city_graph.shortest_paths(from_nodes, to_node, weights=weights))
 
     def clearVehicleMovement(self, vehicle):
         """
@@ -766,50 +550,50 @@ class EMSModel(Sim.Simulator):
         for e in events_copy:
             if isinstance(e, Events.AmbulanceStartMovingEvent):
                 if e.vehicle == vehicle:
-                    self.events.elements.remove(e)
+                    self.events.remove(e)
 
         vehicle.record.append((self.now(), vehicle.pos, None, vehicle.patient, vehicle.patient.hospital if vehicle.patient is not None else None))
-    
-    def registerVehicleStationChange(self, vehicle, node):
-        if isinstance(self.assigner, Solvers.NearestDispatcher):
-            return
-
-        if vehicle.borough not in self.covering_state:
-            self.covering_state[vehicle.borough] = {}
-
-        if vehicle.patient is None:
-            self.covering_state[vehicle.borough][vehicle] = (node, self.getShortestDistances(node, self.parameters.demand_borough[vehicle.borough])[0])
-        else:
-            if vehicle in self.covering_state:
-                del self.covering_state[vehicle.borough][vehicle]
 
     def _timePeriod(self, seconds, periods):
+        """
+        Private function to compute the current time period based on simulation time
+        """
         hours = (seconds % 86400) // 3600
-        cummulative_periods = [sum(periods[:i+1]) for i in range(len(periods))]
+        cummulative_periods = [sum(periods[:i + 1]) for i in range(len(periods))]
         for i, l in enumerate(cummulative_periods):
             if hours < l:
                 return i
-    
+
     def timePeriod(self):
+        """
+        Returns the current time period of the simulation
+        """
         return self._timePeriod(self.now(), self.parameters.time_periods)
-    
+
     def actualPeriodLength(self):
-        return self.parameters.time_periods[self.timePeriod()]*3600
+        return self.parameters.time_periods[self.timePeriod()] * 3600
 
     def timeInsidePeriod(self):
+        """
+        Return how much simulation time has elapsed since the time period started
+        """
         periods = self.parameters.time_periods
-        cummulative_periods = [0] + [sum(periods[:i+1])*3600 for i in range(len(periods))]
+        cummulative_periods = [0] + [sum(periods[:i + 1]) * 3600 for i in range(len(periods))]
         time_period = self.timePeriod()
         return self.now() - cummulative_periods[time_period]
 
     def getStatistics(self):
+        """
+        Returns all the statistics collected at the moment, including all the statistics at each vehicle and the
+        emergency record.
+        """
         for v in self.vehicles:
             self.vehicle_statistics[v.name] = {'Statistics': v.statistics, 'Record': v.record}
 
         return [self.statistics, self.vehicle_statistics, self.emergencyRecord]
-    
+
     def __str__(self):
-        return 'Simulator'
+        return 'EMS Simulator'
 
 
 class Emergency:
@@ -821,7 +605,7 @@ class Emergency:
       3: Being Carried
 
     and the vehicle property represents the corresponding vehicle
-    whose nature will depend on the emergency status.    
+    whose nature (Vehicle object or None) will depend on the emergency status.
     """
 
     N_EMERGENCIES = 0
@@ -833,20 +617,27 @@ class Emergency:
                  disposition_code: int):
         self.arrival_time: float = arrival_time
         self.node: str = node
-        self.severity:int = severity
+        self.severity: int = severity
         self.disposition_code = disposition_code
         self.vechicle: Optional[Vehicle] = None
 
+        # Emergency state variables
         self.status: int = 0
-        self.vehicle_assigned_time: float = 0
-        self.start_attending_time: float = 0
-        self.to_hospital_time: float = 0
-        self.hospital: Optional[str] = None
+        self.vehicle_assigned_time: float = 0       # Ambulance assigned
+        self.start_attending_time: float = 0        # Service started
+        self.to_hospital_time: float = 0            # Transfer to hospital started
+        self.hospital: Optional[str] = None         # Hospital assigned
 
         Emergency.N_EMERGENCIES += 1
         self.name = 'Emergency {}'.format(Emergency.N_EMERGENCIES)
-    
+
     def onVehicleArrive(self, vehicle: Vehicle):
+        """
+        Function to be called when a vehicle arrives to attend the emergency.
+
+        TODO:
+        Disposition codes and service times are hard-coded, should be parametrized
+        """
         self.vehicle = vehicle
         self.markStatus(2)
 
@@ -855,12 +646,29 @@ class Emergency:
             self.attending_time = 0
         else:
             if self.severity == 1:
-                self.attending_time = np.random.gamma(6.099280636730107)*271.21712543885883-243.7935927436323
+                self.attending_time = np.random.beta(2.1509242634375183, 4.592402000128885) * (3500 - 1) + 1
             else:
-                self.attending_time = np.random.beta(3.4911624003509623, 229327901002.9558)*82395177367522.72-38.931290935256456
-    
+                self.attending_time = np.random.beta(2.8715309024153197, 4.588531730319283) * (3500 - 2) + 2
+
     def markStatus(self, status):
         self.status = status
-    
+
+    def assignBorough(self, simulator):
+        """
+        This function is called to map the arriving emergency to a specific borough.
+        This is necessary since some of the nodes are outside the borders of all the boroughs. In the case an emergency arrives to one of them,
+        the borough of the vehicle node is used.
+        """
+        emergency_borough = int(simulator.parameters.nodes_with_borough[simulator.parameters.nodes_with_borough['osmid'] == self.node]['boro_code'])
+
+        # Get the nearest borough
+        node = self.node
+        if emergency_borough == 0:
+            distances = simulator.getShortestDistances([v.to_node for v in simulator.vehicles], node)
+            emergency_borough = simulator.vehicles[np.argmin(distances.reshape(-1))].borough
+            print("Emergency from node {} mapped to borough {}".format(self.node, emergency_borough))
+
+        self.borough = emergency_borough
+
     def __str__(self):
         return self.name

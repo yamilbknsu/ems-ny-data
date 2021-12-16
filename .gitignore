@@ -1,17 +1,25 @@
 .mypy_cache/
-DL Data/
-Generated Shapefiles/
-data/
 __pycache__/
-JSON events/
-prueba.sbatch
-prueba.py
-dataSummary.xlsx
-Analysis.py
-emergenciesPlot.svg
+.ipynb_checkpoints/
+
 *.pdf
 *.xlsx
 *.svg
 KDEplot.pdf
 *.txt
+*.ilp
+*.ipynb
+*.DS_Store
+test*
+dataSummary.xlsx
+
+data/
+JSON events/
+StatisticsResults/
+Generated Shapefiles/
 Maps and Others/
+
+prueba.sbatch
+prueba.py
+Analysis.py
+emergenciesPlot.svg

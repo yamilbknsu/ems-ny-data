@@ -118,13 +118,18 @@ def arrivalShpToArrivalEvents(gdf, street_nodes, simulation_start_date, save_dir
 
 if __name__ == "__main__":
     DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//'
+    demand_nodes_file = 'Old Files//Generated Shapefiles//GeoTools//Uniform600m//Uniform600mDemandNew.geojson'
+    DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//'
     nodes_file = 'ems-ny-data//NYC Graph//NYC_nodes_revised.geojson'
 
     initial_dataset_setups = ['LS19', 'HS19']
-    spatio_temporal_replications = list(range(30))
+    spatio_temporal_replications = list(range(50))
 
     gdfs = []
     nodes = gpd.read_file(DATA_DIR + nodes_file)
+    demand_nodes = gpd.read_file(DATA_DIR + demand_nodes_file)
+
+    nodes = nearest_neighbor(demand_nodes, nodes, 1)
 
     for setup, strep in itertools.product(initial_dataset_setups, spatio_temporal_replications):                                # noqa E501
 
@@ -138,8 +143,8 @@ if __name__ == "__main__":
         gdf = gdf.drop(['arrival', 'interarriv'], axis=1)
 
         # Check for crs of the data
-        if gdf.crs['init'] == 'epsg:3857':
-            gdf = gdf.to_crs(epsg=4326)
+        #if gdf.crs['init'] == 'epsg:3857':
+        gdf = gdf.to_crs(epsg=4326)
         
         gdfs.append(gdf)
 

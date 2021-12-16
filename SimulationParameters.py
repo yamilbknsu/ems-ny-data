@@ -53,6 +53,7 @@ class SimulationParameters:
                  reachable_inverse: List[Dict[str, List[str]]],
                  uber_nodes: Dict[str, str],
                  vehicle_shift: Callable = lambda _: 8 * 3600,
+                 vehicle_arrival_deviation: float = 3600,
                  uber_seconds: float = 8000,
                  simulation_time: float = 3600,
                  force_static: bool = False,
@@ -170,6 +171,7 @@ class SimulationParameters:
         self.ALS_tours = ALS_tours
         self.BLS_tours = BLS_tours
         self.vehicle_shift = vehicle_shift
+        self.vehicle_arrival_deviation = vehicle_arrival_deviation
         self.initial_nodes = initial_nodes
         self.hospital_nodes = hospital_nodes
         self.hospital_borough = hospital_borough

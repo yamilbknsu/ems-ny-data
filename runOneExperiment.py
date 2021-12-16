@@ -32,7 +32,7 @@ speeds = speeds.loc[graph.es['edgeid'], :]
 # Experiment configuration
 experiment = {'day': 'monday', 'dataReplica': 0, 'simTime': 24 * 3600, 'relocatorModel': 'survivalNoExp', 'dispatcher': 'preparedness',
               'relocate': False, 'ambulance_distribution': [355, 802], 'workload_restriction': True, 'workload_limit': .4, 'useUber': True, 'GAP': 0.05,
-              'parameters_dir': 'Base', 'relocation_period': 600, 'uberRatio': 1}
+              'parameters_dir': 'HRDemand', 'relocation_period': 600, 'uberRatio': 1}
 
 # Importing the data
 with open(DATA_DIR + 'Preprocessing Values//{}//candidate_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:

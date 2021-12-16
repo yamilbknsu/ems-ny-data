@@ -306,7 +306,7 @@ class EMSModel(Sim.Simulator):
         self.insert(Events.HospitalSettingEvent(self, 0))
 
         # Schedule the starting positions event
-        self.insert(Events.InitialPositioningEvent(self, 1e-6))
+        self.insert(Events.InitialPositioningEvent(self, .1))
 
         # Lists representing the state of the model
         self.activeEmergencies: List[Emergency] = list()        # All the emergencies in the system

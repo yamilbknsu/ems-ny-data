@@ -74,7 +74,7 @@ class RelocationAndDispatchingEvent(Sim.Event):
             simulator.statistics['AvailableALSVehicles'].record(simulator.now(), len(simulator.getAvaliableVehicles(v_type=0)))
             simulator.statistics['AvailableBLSVehicles'].record(simulator.now(), len(simulator.getAvaliableVehicles(v_type=1)))
             
-            # If this is a BLS call or the number of active emergencies is bigger than the number of available ambulances
+            # If this is a BLS call or the number of active emergencies is smaller than the number of available ambulances
             if self.severity == 1 or len(simulator.getAvaliableVehicles(0, self.borough)) >= len(simulator.getUnassignedEmergencies(1, self.borough)):
                 # Run optimization process with relocation and dispatching
                 optimal_positions, reposition_dict, dispatching_dict = simulator.optimizer.optimize(simulator, simulator.parameters, False, severity=self.severity, borough=self.borough)

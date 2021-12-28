@@ -30,9 +30,9 @@ speeds = speeds.loc[graph.es['edgeid'], :]
 
 
 # Experiment configuration
-experiment = {'day': 'monday', 'dataReplica': 0, 'simTime': 24 * 3600, 'relocatorModel': 'survivalNoExp', 'dispatcher': 'preparedness',
+experiment = {'day': 'friday', 'dataReplica': 0, 'simTime': 24 * 3600, 'relocatorModel': 'survivalNoExp', 'dispatcher': 'preparedness',
               'relocate': False, 'ambulance_distribution': [355, 802], 'workload_restriction': True, 'workload_limit': .4, 'useUber': True, 'GAP': 0.05,
-              'parameters_dir': 'HRDemand', 'relocation_period': 600, 'uberRatio': 1}
+              'parameters_dir': 'HalfManhattan', 'relocation_period': 600, 'uberRatio': 1}
 
 # Importing the data
 with open(DATA_DIR + 'Preprocessing Values//{}//candidate_nodes.pickle'.format(experiment['parameters_dir']), 'rb') as file:
@@ -70,12 +70,16 @@ with open(DATA_DIR + 'Preprocessing Values//{}//graph_to_demand.pickle'.format(e
     graph_to_demand = pickle.load(file)
 
 # Importing low severity emergencies file
-with open(DATA_DIR + 'Arrival Events//{}//LS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+with open(DATA_DIR + 'Arrival Events//{}//LS//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
     emergencies: List['Events.EmergencyArrivalEvent'] = pickle.load(file)
 
 # Importing high severity emergencies file
-with open(DATA_DIR + 'Arrival Events//{}//HS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+with open(DATA_DIR + 'Arrival Events//{}//HS//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
     emergencies += pickle.load(file)
+
+# Filter events if HalfManhattan is the scenario
+if experiment['parameters_dir'] == 'HalfManhattan':
+    emergencies = [e for e in emergencies if e.node in demand_nodes]
 
 generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
 
@@ -89,8 +93,8 @@ sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
                                              graph_to_demand=graph_to_demand,
                                              demand_nodes=demand_nodes,
                                              demand_rates=demand_rates,
-                                             ALS_tours=355,
-                                             BLS_tours=802,
+                                             ALS_tours=80, # 355 for 5 boroughs, 80 for half Manhattan
+                                             BLS_tours=175, # 802 for 5 boroughs, 175 for half Manhattan
                                              mean_busytime=busy_time,
                                              cand_cand_time=cand_cand_time,
                                              cand_demand_time=cand_demand_time,
@@ -110,7 +114,7 @@ sim_parameters = Models.SimulationParameters(simulation_time=24 * 3600,
                                              force_static=False,
                                              random_seed=0)
 
-optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocatorDispatcher()
+optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.SORDARelocatorDispatcher()
 
 simulator: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)
 statistics = simulator.run()

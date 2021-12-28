@@ -91,11 +91,11 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
 
     print('Starting ' + name)
     # Importing low severity emergencies file
-    with open(DATA_DIR + 'Arrival Events//{}//LS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+    with open(DATA_DIR + 'Arrival Events//{}//LS//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
         emergencies: List['Events.EmergencyArrivalEvent'] = pickle.load(file)
 
     # Importing high severity emergencies file
-    with open(DATA_DIR + 'Arrival Events//{}//HS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+    with open(DATA_DIR + 'Arrival Events//{}//HS//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
         emergencies += pickle.load(file)
 
     generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
@@ -138,7 +138,7 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
                                                     random_seed=experiment['dataReplica'])
 
     if 'SBRDA' in experiment['model']:
-        optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocatorDispatcher()
+        optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.SORDARelocatorDispatcher()
     else:
         optimizer = ROASolver.ROA()
 

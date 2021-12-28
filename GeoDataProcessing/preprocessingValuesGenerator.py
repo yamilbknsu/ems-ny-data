@@ -7,9 +7,9 @@ import geopandas as gpd
 from typing import List
 
 # Internal imports
-from dispatchAnalysis import nearest_neighbor
+from HelperFunctions import nearest_neighbor
 
-DATA_DIR = 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//Old files//'         # noqa E501
+DATA_DIR = '../../Review Files/Preproc Files'         # noqa E501
 
 
 def timeBasedRange(candidates, demand, graph, speeds, travel_limit):
@@ -144,7 +144,6 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
     """
     As you see, a huge function, but don't be afraid, it's just a
     bunch of little processes that compute some statistics and lists.
-    (Excep for the neighborhood, that's a big deal)
     """
 
     # Compute the graph points for the candidates
@@ -208,8 +207,8 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
             pickle.dump(uber_nodes, f)
 
     print('Computing demand values...')
-    computeDemandValues(DATA_DIR + '/data/dispatch_data_for_preprocessing.pickle',
-                        DATA_DIR + '/data/dispatch_data_reduced.pickle',
+    computeDemandValues(DATA_DIR + '/dispatch_data_for_preprocessing.pickle',
+                        DATA_DIR + '/dispatch_data_reduced.pickle',
                         demand_df, demand_to_node,
                         save_dir)
     
@@ -239,48 +238,6 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
 
     with open(save_dir + '/reachable_inverse.pickle', 'wb') as f:
         pickle.dump(reachable_inverse, f)
-    
-    # Compute the neighborhoods
-    print('Computing neighborhoods...')
-    neighborhood: List[dict] = []
-    neighborhood_candidates: List[dict] = []
-    neighborhood_k: List[dict] = []
-
-    for time_period in range(5):
-        print(time_period)
-        neighborhood_dict = {}
-        neighborhood_candidates_dict = {}
-        neighborhood_k_dict = {}
-
-        for c in candidate_nodes:
-            neighbor_demands = reachable_demand[time_period][c]
-            neighbor_k: List[str] = []
-
-            for d in reachable_demand[time_period][c]:
-                neighbor_k = neighbor_k + reachable_inverse[time_period][d]
-                for c1 in reachable_inverse[time_period][d]:
-                    neighbor_demands = neighbor_demands + \
-                        reachable_demand[time_period][c1]
-            neighbor_demands = list(set(neighbor_demands))
-            neighbor_k = list(set(neighbor_k))
-    
-            neighborhood_dict[c] = neighbor_demands
-            neighborhood_candidates_dict[c] = neighbor_k
-            neighborhood_k_dict[c] = len(neighbor_k)
-
-        neighborhood.append(neighborhood_dict)
-        neighborhood_candidates.append(neighborhood_candidates_dict)
-        neighborhood_k.append(neighborhood_k_dict)
-
-    
-    with open(save_dir + '/neighborhood.pickle', 'wb') as f:
-        pickle.dump(neighborhood, f)
-    
-    with open(save_dir + '/neighborhood_k.pickle', 'wb') as f:
-        pickle.dump(neighborhood_k, f)
-    
-    with open(save_dir + '/neighborhood_candidates.pickle', 'wb') as f:
-        pickle.dump(neighborhood_candidates, f)
 
     ## Compute the candidate demand travel matrix for each time period
     print('Computing time matrices...')
@@ -309,27 +266,28 @@ def computePreprocessingData(candidates_df, demand_df, hospital_df,
 
 if __name__ == "__main__":
     # Load the original candidates and nodes
-    original_candidates = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/EMScandidatesMixedLRNew.geojson')
+    original_candidates = gpd.read_file(DATA_DIR + '/candidatesHalfManhattan.geojson')
 
     # Load the nodes of the graph with borough
-    graph_nodes = gpd.read_file('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
+    graph_nodes = gpd.read_file(DATA_DIR + '/NYC_nodes_w_borough/NYC_nodes_w_borough.shp')
 
     # Load the uniform demand points
-    demand_points = gpd.read_file(DATA_DIR + 'Generated Shapefiles/GeoTools/Uniform600m/Uniform600mDemandNew.geojson')
+    demand_points = gpd.read_file(DATA_DIR + '/demandHalfmanhattan.geojson')
 
     # Load the hospital points
-    hospital_df = gpd.read_file(DATA_DIR + 'Generated Shapefiles/NYC_Hospitals/NYC_Hospitals.geojson')
+    hospital_df = gpd.read_file(DATA_DIR + '/NYC_Hospitals/NYC_Hospitals.geojson')
 
     # Load the igraph
-    with open("C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph//NYC_graph_revised.pickle", 'rb') as f:
+    with open(DATA_DIR + "/NYC_graph_revised.pickle", 'rb') as f:
         city_graph = pickle.load(f)
 
     # Load the speeds df
-    speeds = pd.read_csv('C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//NYC Graph//edge_speeds_vicky.csv')
+    speeds = pd.read_csv(DATA_DIR + '/edge_speeds_vicky.csv')
     speeds = speeds.drop('Unnamed: 0', axis=1)
 
     # Sort the df according to city graph order
     speeds.index = speeds['edgeid']
     speeds = speeds.loc[city_graph.es['edgeid'], :]
 
-    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria Ambulancias//ems-ny-data//Preprocessing Values//Base//')
+    experimentID = 'HalfManhattan'
+    computePreprocessingData(original_candidates, demand_points, hospital_df, graph_nodes, city_graph, speeds, '../Preprocessing Values/{}/'.format(experimentID))

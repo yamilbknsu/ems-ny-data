@@ -169,7 +169,7 @@ sim_parameters = Models.SimulationParameters(simulation_time=.5 * 3600,
 
 # optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.UberRelocatorDispatcher()
 # optimizer: OnlineSolvers.RelocationModel = ROASolver.ROA()
-optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocatorDispatcher()
+optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.SORDARelocatorDispatcher()
 
 # emsModel: Models.EMSModel = Models.EMSModel(graph, generator, optimizer, sim_parameters, verbose=True)# Initializing the model
 emsModel = AsyncEMSModel(graph, generator, optimizer, sim_parameters)

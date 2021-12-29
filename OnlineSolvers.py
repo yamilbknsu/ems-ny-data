@@ -47,6 +47,9 @@ class SORDARelocatorDispatcher:
         response time.
         """
         return (1 + np.exp(0.679 + .262 * response_times)) ** -1
+    
+    def SurvivalDispatching(self, response_times):
+        return self.SurvivalFunction(response_times)
 
     def optimize(self,
                  simulator: "Models.EMSModel",
@@ -135,7 +138,7 @@ class SORDARelocatorDispatcher:
 
         if severity == 0:
             survival_matrix = self.SurvivalFunction(cand_demand_travel / 60)  # Travel time in minutes
-            survival_dispatching = self.SurvivalFunction(travel_times_CE / 60)  # Travel time in minutes
+            survival_dispatching = self.SurvivalDispatching(travel_times_CE / 60)
         else:
             b_bar = np.mean([U[u_node].total_busy_time for u_node in U_nodes]) if len(U) > 0 else 1e10
             rho = [[U[u_node].total_busy_time + travel_times_CE[u][e] + 3600 * params.mean_busytime[severity].at[t + 1, params.graph_to_demand[e_node]] - b_bar if not closest_dispatch_BLS
@@ -680,3 +683,20 @@ class SORDARelocatorDispatcher:
                     final_dispatching[simulator.newUberVehicle(simulator.parameters.uber_nodes[emergency.node], emergency.borough)] = emergency
 
             return final_dispatching
+
+
+class CoverageSORDA(SORDARelocatorDispatcher):
+
+    def __init__(self):
+        super().__init__()
+
+    def SurvivalFunction(self, response_times):
+        """
+        This class is a modified version of the SORDA model where we do not use a survival function but
+        simple 8-min coverage instead. For this, we override the survival function with a simple boolean
+        operator on the response time matrix.
+        """
+        return np.where(response_times < 8, 1, 0)
+    
+    def SurvivalDispatching(self, response_times):
+        return 1 / np.where(response_times > 0, response_times * 60, 1)

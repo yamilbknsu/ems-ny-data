@@ -79,7 +79,8 @@ with open(DATA_DIR + 'Arrival Events//{}//HS//strep_{}.pickle'.format('Friday' i
 
 # Filter events if HalfManhattan is the scenario
 if experiment['parameters_dir'] == 'HalfManhattan':
-    emergencies = [e for e in emergencies if e.node in demand_nodes]
+    nodes = gpd.read_file(DATA_DIR + 'Preprocessing Values//HalfManhattan//NYC_nodes.geojson')
+    emergencies = [e for e in emergencies if (e.node in demand_nodes or e.node in nodes.osmid.values.tolist())]
 
 generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
 

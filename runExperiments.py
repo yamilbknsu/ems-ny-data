@@ -20,7 +20,7 @@ General TODO for the project
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', type=int, default=100, help='Index of the experiment to run')
+parser.add_argument('-i', type=int, default=1, help='Index of the experiment to run')
 parser.add_argument('-n', type=int, default=1, help='Number of replicas per task')
 args = parser.parse_args()
 
@@ -91,12 +91,35 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
 
     print('Starting ' + name)
     # Importing low severity emergencies file
-    with open(DATA_DIR + 'Arrival Events//{}//LS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+    with open(DATA_DIR + 'Arrival Events//{}//LS//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
         emergencies: List['Events.EmergencyArrivalEvent'] = pickle.load(file)
 
     # Importing high severity emergencies file
-    with open(DATA_DIR + 'Arrival Events//{}//HS19//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Monday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+    with open(DATA_DIR + 'Arrival Events//{}//HS//strep_{}.pickle'.format('Friday' if experiment['day'] == 'friday' else 'Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
         emergencies += pickle.load(file)
+    
+    # If simulation time exceeds one day, select from both thursday
+    if experiment['simTime'] == 48 * 3600 and experiment['day'] == 'thursday':
+        # Importing low severity emergencies file
+        with open(DATA_DIR + 'Arrival Events//{}//LS//strep_{}.pickle'.format('Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+            emergencies: List['Events.EmergencyArrivalEvent'] = [e for e in pickle.load(file) if e.time >= 24 * 3600]
+
+        # Importing high severity emergencies file
+        with open(DATA_DIR + 'Arrival Events//{}//HS//strep_{}.pickle'.format('Thursday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+            emergencies += [e for e in pickle.load(file) if e.time >= 24 * 3600]
+        
+        # Importing high severity emergencies file
+        with open(DATA_DIR + 'Arrival Events//{}//LS//strep_{}.pickle'.format('Friday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+            emergencies += [e for e in pickle.load(file) if e.time <= 24 * 3600]
+
+        # Importing high severity emergencies file
+        with open(DATA_DIR + 'Arrival Events//{}//HS//strep_{}.pickle'.format('Friday', experiment['dataReplica']), 'rb') as file:               # noqa E501
+            emergencies += [e for e in pickle.load(file) if e.time <= 24 * 3600]
+
+    # Filter events if HalfManhattan is the scenario
+    if experiment['parameters_dir'] == 'HalfManhattan':
+        nodes = gpd.read_file(DATA_DIR + 'Preprocessing Values//HalfManhattan//NYC_nodes.geojson')
+        emergencies = [e for e in emergencies if (e.node in demand_nodes or e.node in nodes.osmid.values.tolist())]
 
     generator: Generators.ArrivalGenerator = Generators.CustomArrivalsGenerator([e for e in emergencies])
 
@@ -138,7 +161,9 @@ for i in range((args.i) * args.n, (args.i + 1) * args.n):
                                                     random_seed=experiment['dataReplica'])
 
     if 'SBRDA' in experiment['model']:
-        optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.AlternativeUberRelocatorDispatcher()
+        optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.SORDARelocatorDispatcher()
+    elif experiment['model'] == 'CoverageSORDA':
+        optimizer: OnlineSolvers.RelocationModel = OnlineSolvers.CoverageSORDA()
     else:
         optimizer = ROASolver.ROA()
 

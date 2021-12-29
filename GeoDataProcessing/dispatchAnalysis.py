@@ -16,7 +16,7 @@ sys.path.insert(1, 'C://Users//Yamil//Proyectos//Proyectos en Git//Memoria' +
                    ' Ambulancias//ems-ny-data//')
 
 # Internal imports
-import Events                                                                                                               # noqa E402
+from .. import Events
 
 """
 The following two functions were extracted and the modified from the site:

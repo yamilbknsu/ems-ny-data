@@ -372,7 +372,7 @@ class SORDARelocatorDispatcher:
             dispatch_list = [k[u][e].x for u, u_node in enumerate(U_nodes)]
             if 1 in dispatch_list:
                 final_dispatching[U[U_nodes[dispatch_list.index(1)]]] = emergency
-            elif z[e].x == 1:
+            elif severity > 0 and z[e].x == 1:
                 final_dispatching[simulator.newUberVehicle(simulator.parameters.uber_nodes[emergency.node], emergency.borough)] = emergency
 
         return final_positions, final_repositioning, final_dispatching

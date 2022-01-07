@@ -337,6 +337,7 @@ class SORDARelocatorDispatcher:
 
         # Optimizer setup
         model.setParam('MIPGap', params.optimization_gap)
+        model.setParam('TimeLimit', 180)
         model.setParam('LogToConsole', 1 if simulator.verbose else 0)
 
         # Run optimization
@@ -350,8 +351,9 @@ class SORDARelocatorDispatcher:
 
         # In case of error, save the output
         if model.Status != grb.GRB.OPTIMAL:
-            model.computeIIS()
-            model.write("Model Errors/SBRDANewmodel.ilp")
+            pass
+            # model.computeIIS()
+            # model.write("Model Errors/SBRDANewmodel.ilp")
 
         # Build the final dictionaries
         # This process looks messy but we are only extracting the solution
@@ -501,6 +503,7 @@ class SORDARelocatorDispatcher:
                         name='Const_4')
 
         model.setParam('MIPGap', params.optimization_gap)
+        model.setParam('TimeLimit', 180)
         model.setParam('LogToConsole', 1 if simulator.verbose else 0)
 
         print(time.time() - start_time, '- Solving the model...')
@@ -666,6 +669,7 @@ class SORDARelocatorDispatcher:
              for e, emergency in enumerate(E)}
 
             model.setParam('MIPGap', params.optimization_gap)
+            model.setParam('TimeLimit', 180)
             model.setParam('LogToConsole', 1 if simulator.verbose else 0)
 
             print(time.time() - start_time, '- Solving the model...')

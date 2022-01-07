@@ -4,11 +4,11 @@ import pickle
 
 # Testing sets
 days = ['friday']
-model = ['SBRDANew']
+model = ['CoverageSORDA']
 dataReplica = list(range(30))
 simTime = [24 * 3600]
-uberHours = {'SBRDANew': [0, 100, 250], 'CoverageSORDA': [250],'ROA': [0], 'SBRDAStatic': [0]}
-ambulanceDistribution = [[75, 165]]
+uberHours = {'SBRDANew': [0], 'CoverageSORDA': [250],'ROA': [0], 'SBRDAStatic': [0]}
+ambulanceDistribution = [[7, 10], [10, 15], [14, 20], [28, 40], [45, 70], [65, 100], [75, 130]]
 workloadRestriction = [True]
 workloadLimit = [.7]
 simultaneous_relocations = [8]
@@ -19,14 +19,14 @@ simultaneous_relocations = [8]
 # leaving an emergency uncovered is equivalent to responding 10 days,
 # 5 days or 1 day late, which is practice, means it will only be chosen
 # when no other options are left
-uncovered_penalty = [10 * 24 * 3600, 24 * 3600, 3600]
+uncovered_penalty = [10 * 24 * 3600]
 
 # Penalization for each second over the maximum allowed waiting time a LS emergency
 # is expected to receive service. This number is mainly used to evaluate the trade-off
 # between ambulance utilization (dispatching penalty) and late response. For example, if
 # this is set to 60, we allow an emergency to wait one aditional second if it saves one
 # minute in ambulance workload imbalance.
-late_response_penalty = [60, 30, 120]
+late_response_penalty = [60]
 
 # Not included in the paper, but a parameter of the model anyway.
 dispatching_penalty = [1]
@@ -34,7 +34,7 @@ dispatching_penalty = [1]
 # Penalty for travel time. This is used to consider the dispatching options that
 # minimize travel time among those that are equal in every other way, so this value should not
 # interfere with the other penalties and therefore is a very small number.
-travel_distance_penalty = [1e-10, 1e-5]
+travel_distance_penalty = [0]
 
 target_relocTime = [2160]
 max_relocation_time = [1200]

@@ -103,6 +103,17 @@
             "env": {},
             "envFile": "${workspaceRoot}/.env"
 
+        },
+        {
+            "name": "Test",
+            "type": "python",
+            "request": "launch",
+            "stopOnEntry": false,
+            "python": "${command:python.interpreterPath}",
+            "program": "${file}",
+            "cwd": "${workspaceRoot}",
+            "env": {},
+            "envFile": "${workspaceRoot}/.env"
         }
     ]
 }

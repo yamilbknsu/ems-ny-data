@@ -3,12 +3,12 @@ import os
 import pickle
 
 # Testing sets
-days = ['friday']
-model = ['CoverageSORDA']
+days = ['thursday']
+model = ['SBRDANew', 'ROA']
 dataReplica = list(range(30))
-simTime = [24 * 3600]
-uberHours = {'SBRDANew': [0], 'CoverageSORDA': [250],'ROA': [0], 'SBRDAStatic': [0]}
-ambulanceDistribution = [[7, 10], [10, 15], [14, 20], [28, 40], [45, 70], [65, 100], [75, 130]]
+simTime = [48 * 3600]
+uberHours = {'SBRDANew': [250], 'CoverageSORDA': [0],'ROA': [0], 'SBRDAStatic': [0]}
+ambulanceDistribution = [[355, 802]]
 workloadRestriction = [True]
 workloadLimit = [.7]
 simultaneous_relocations = [8]
@@ -26,7 +26,7 @@ uncovered_penalty = [10 * 24 * 3600]
 # between ambulance utilization (dispatching penalty) and late response. For example, if
 # this is set to 60, we allow an emergency to wait one aditional second if it saves one
 # minute in ambulance workload imbalance.
-late_response_penalty = [60]
+late_response_penalty = [120]
 
 # Not included in the paper, but a parameter of the model anyway.
 dispatching_penalty = [1]
@@ -34,14 +34,14 @@ dispatching_penalty = [1]
 # Penalty for travel time. This is used to consider the dispatching options that
 # minimize travel time among those that are equal in every other way, so this value should not
 # interfere with the other penalties and therefore is a very small number.
-travel_distance_penalty = [0]
+travel_distance_penalty = [1e-10]
 
 target_relocTime = [2160]
 max_relocation_time = [1200]
 max_redeployment_time = [800]
 relocation_cooldown = [3600]
 GAP = [.05]
-parameters_dir = 'HalfManhattan'
+parameters_dir = 'Base'
 
 EXPERIMENTS = [{'day': day, 'model': m, 'dataReplica': rep, 'simTime': time, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'GAP': gap,
                 'parameters_dir': parameters_dir, 'uberHours': uH, 'relocQty': relocQty, 'uncovered': unc, 'lateResponse': lr, 'disaptchingPenalt': disp, 'ttPenalty': ttp, 'targetReloc': targetReloc,

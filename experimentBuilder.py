@@ -3,12 +3,12 @@ import os
 import pickle
 
 # Testing sets
-days = ['thursday']
-model = ['SBRDANew', 'ROA']
+days = ['friday']
+model = ['SBRDANew']
 dataReplica = list(range(30))
-simTime = [48 * 3600]
-uberHours = {'SBRDANew': [250], 'CoverageSORDA': [0],'ROA': [0], 'SBRDAStatic': [0]}
-ambulanceDistribution = [[355, 802]]
+simTime = [24 * 3600]
+uberHours = {'SBRDANew': [0, 10, 20, 40, 80, 160, 320], 'CoverageSORDA': [0],'ROA': [0], 'SBRDAStatic': [0]}
+ambulanceDistribution = [[21, 30]]
 workloadRestriction = [True]
 workloadLimit = [.7]
 simultaneous_relocations = [8]
@@ -26,7 +26,7 @@ uncovered_penalty = [10 * 24 * 3600]
 # between ambulance utilization (dispatching penalty) and late response. For example, if
 # this is set to 60, we allow an emergency to wait one aditional second if it saves one
 # minute in ambulance workload imbalance.
-late_response_penalty = [120]
+late_response_penalty = [60]
 
 # Not included in the paper, but a parameter of the model anyway.
 dispatching_penalty = [1]
@@ -41,7 +41,7 @@ max_relocation_time = [1200]
 max_redeployment_time = [800]
 relocation_cooldown = [3600]
 GAP = [.05]
-parameters_dir = 'Base'
+parameters_dir = 'HalfManhattan'
 
 EXPERIMENTS = [{'day': day, 'model': m, 'dataReplica': rep, 'simTime': time, 'ambulance_distribution': amb, 'workload_restriction': wlRes, 'workload_limit': wlL, 'GAP': gap,
                 'parameters_dir': parameters_dir, 'uberHours': uH, 'relocQty': relocQty, 'uncovered': unc, 'lateResponse': lr, 'disaptchingPenalt': disp, 'ttPenalty': ttp, 'targetReloc': targetReloc,
@@ -75,7 +75,7 @@ for experiment in EXPERIMENTS:
                                                                           experiment['relocCooldown'])
     output.append([name, experiment])
 
-override = False
+override = True
 if not override and os.path.exists('experimentsConfig.pickle'):
     with open('experimentsConfig.pickle', 'rb') as f:
         output = pickle.load(f) + output
